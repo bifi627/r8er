@@ -1,0 +1,34 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \".claude/statusline-command.sh\""
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"(New-Object System.Media.SoundPlayer 'C:\\Windows\\Media\\chimes.wav').PlaySync()\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -Command \"(New-Object System.Media.SoundPlayer 'C:\\Windows\\Media\\ding.wav').PlaySync()\""
+          }
+        ]
+      }
+    ]
+  }
+}

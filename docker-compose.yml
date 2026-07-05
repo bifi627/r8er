@@ -1,0 +1,51 @@
+# r8er dev dependencies. Backend/frontend/agent run natively (see CLAUDE.md).
+# Usage: docker compose up -d
+#        docker compose --profile relay up -d   (adds local TURN)
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: r8er
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: r8er
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  jellyfin:
+    # Pinned deliberately — never `latest`. Update the pin consciously.
+    image: jellyfin/jellyfin:10.10.7
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ./dev-media:/media:ro
+
+  firebase:
+    # Auth emulator only (Node-based, no Java needed).
+    image: node:22-alpine
+    working_dir: /app
+    command: npx -y firebase-tools emulators:start --only auth --project demo-r8er
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./dev/firebase:/app
+
+  coturn:
+    # Local TURN for forcing the relay path (iceTransportPolicy: 'relay').
+    image: coturn/coturn:4
+    profiles: ["relay"]
+    command: >-
+      turnserver -n --lt-cred-mech --user dev:dev --realm r8er.dev
+      --listening-port 3478 --min-port 49160 --max-port 49200 --verbose
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+
+volumes:
+  pgdata:
+  jellyfin-config:
+  jellyfin-cache:

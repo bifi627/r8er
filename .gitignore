@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+dist/
+
+# Go
+agent/agent
+*.exe
+
+# Local env & generated media
+.env
+dev-media/
+
+# IDE
+.vs/
+.idea/
