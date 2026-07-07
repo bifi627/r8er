@@ -1,0 +1,259 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>r8er POC — connectivity spike (step 6)</title>
+<!-- Throwaway dev harness (file:// or served from the backend). Connects to the
+     agent through signaling, measures agent→browser throughput on the same
+     "throughput" data channel step 3 uses, reads RTCStats to classify the
+     negotiated path (direct vs relay, IPv4/v6, candidate types, RTT), and POSTs
+     one telemetry row per session to the backend. This is the Checkpoint-1
+     instrument: run it from ≥10 real network pairs and read poc_connectivity. -->
+<style>
+  body { font: 15px system-ui; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  label { display: block; margin: .5rem 0 .1rem; font-weight: 600; }
+  input { width: 100%; padding: .4rem; font: inherit; box-sizing: border-box; }
+  .row { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .row > label { flex: 1; min-width: 12rem; }
+  .chk { display: flex; align-items: center; gap: .4rem; font-weight: 600; margin: .8rem 0; }
+  .chk input { width: auto; }
+  button { font: inherit; padding: .5rem 1.1rem; margin: .8rem 0; }
+  #rate { font-size: 2.6rem; font-variant-numeric: tabular-nums; }
+  #verdict { font-size: 1.1rem; font-weight: 700; margin: .6rem 0; }
+  .direct { color: #137333; } .relay { color: #b06000; } .fail { color: #c5221f; }
+  table { border-collapse: collapse; margin: .6rem 0; width: 100%; }
+  td { border: 1px solid #ddd; padding: .25rem .5rem; font: 13px monospace; }
+  td:first-child { color: #666; width: 12rem; }
+  #log { white-space: pre-wrap; color: #555; font: 12px monospace; margin-top: 1rem;
+         max-height: 14rem; overflow: auto; background: #fafafa; padding: .5rem; }
+</style>
+
+<h1>r8er — connectivity spike</h1>
+<p>Start the agent, then Connect. Tag the network you're on (e.g. "pixel-cellular",
+"cafe-wifi"). Fill TURN creds to enable relay; tick <b>force relay</b> to prove the
+relay path. Every run logs one row to the telemetry backend.</p>
+
+<div class="row">
+  <label>Signaling URL <input id="url" value="wss://r8er.up.railway.app/signaling/poc" /></label>
+  <label>Telemetry backend <input id="tele" value="http://localhost:5028" /></label>
+</div>
+<label>Network label (note) <input id="note" placeholder="pixel-cellular / cafe-wifi / home-lan" /></label>
+<div class="row">
+  <label>TURN URLs (comma-sep) <input id="turn" placeholder="turn:host:3478?transport=udp" /></label>
+</div>
+<div class="row">
+  <label>TURN username <input id="tuser" placeholder="dev" /></label>
+  <label>TURN credential <input id="tcred" placeholder="dev" /></label>
+</div>
+<label class="chk"><input type="checkbox" id="relay" /> force relay (iceTransportPolicy: relay)</label>
+
+<div><button id="go">Connect &amp; measure</button> <span id="state">idle</span></div>
+
+<div><span id="rate">0</span> <span>Mbps peak</span></div>
+<div id="verdict"></div>
+<table id="stats"></table>
+<div id="log"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = m => { $("log").textContent += m + "\n"; $("log").scrollTop = 1e9; };
+
+// hash convenience: #signal=…&tele=…&note=…&turn=…&user=…&cred=…&relay=1
+// lets you bookmark a phone URL with TURN creds without editing the page.
+const hash = new URLSearchParams(location.hash.slice(1));
+const setFromHash = (k, id) => { if (hash.get(k) != null) $(id).value = hash.get(k); };
+setFromHash("signal", "url"); setFromHash("tele", "tele"); setFromHash("note", "note");
+setFromHash("turn", "turn"); setFromHash("user", "tuser"); setFromHash("cred", "tcred");
+if (hash.get("relay") === "1") $("relay").checked = true;
+
+// Served from the backend (desktop → localhost, phone → Railway): default
+// signaling + telemetry to THIS origin so there's nothing to fill in and no
+// cross-origin hop. The hash still wins if set; file:// keeps the inputs' defaults.
+if (location.protocol !== "file:") {
+  const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+  if (hash.get("signal") == null) $("url").value = `${wsProto}//${location.host}/signaling/poc`;
+  if (hash.get("tele") == null) $("tele").value = location.origin;
+}
+
+function iceServers() {
+  const servers = [{ urls: "stun:stun.l.google.com:19302" }];
+  const turn = $("turn").value.trim();
+  if (turn) servers.push({
+    urls: turn.split(",").map(s => s.trim()),
+    username: $("tuser").value.trim(),
+    credential: $("tcred").value.trim(),
+  });
+  return servers;
+}
+
+const ipFamily = addr =>
+  !addr ? null : addr.includes(":") ? "ipv6" : addr.includes(".") ? "ipv4" : null;
+
+// Pull the winning candidate pair out of getStats() and classify the path.
+async function classify(pc) {
+  const s = await pc.getStats();
+  // Prefer the transport's selected pair; fall back to the nominated/succeeded
+  // pair with the most bytes (Chrome vs Firefox expose these differently).
+  let pairId = null;
+  s.forEach(r => { if (r.type === "transport" && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
+  let pair = pairId ? s.get(pairId) : null;
+  if (!pair) {
+    let best = -1;
+    s.forEach(r => {
+      if (r.type === "candidate-pair" && r.state === "succeeded" && (r.nominated ?? true)) {
+        const b = r.bytesReceived || 0;
+        if (b >= best) { best = b; pair = r; }
+      }
+    });
+  }
+  if (!pair) return null;
+  const local = s.get(pair.localCandidateId), remote = s.get(pair.remoteCandidateId);
+  const lt = local?.candidateType, rt = remote?.candidateType;
+
+  // Relay detection has to survive a quirk: on a relay-only connection the
+  // winning local candidate can be reported as peer-reflexive (prflx) with its
+  // address redacted, even though its base is the TURN relay socket. But it
+  // keeps `relayProtocol`, which the spec sets ONLY on candidates obtained from
+  // a TURN server — so that is the reliable "am I relaying?" signal;
+  // candidateType==='relay' covers the straightforward case. Collect all
+  // candidates for forensics in raw_stats.
+  const cands = [];
+  s.forEach(r => {
+    if (r.type === "local-candidate" || r.type === "remote-candidate") {
+      cands.push({ side: r.type === "local-candidate" ? "local" : "remote", type: r.candidateType,
+                   protocol: r.protocol, address: r.address, port: r.port,
+                   relayProtocol: r.relayProtocol, url: r.url });
+    }
+  });
+  const localRelay = lt === "relay" || local?.relayProtocol != null;
+  const remoteRelay = rt === "relay";
+  // IP-family readout: the winning local candidate's address is usually redacted
+  // (host mDNS / prflx), so fall back to a gathered relay or srflx local
+  // candidate — that public-mapped address reveals the client's IPv4-vs-IPv6
+  // egress, exactly the "IPv4 vs IPv6" the checkpoint correlates with direct/relay.
+  const relayLocal = cands.find(c => c.side === "local" && c.type === "relay");
+  const srflxLocal = cands.find(c => c.side === "local" && c.type === "srflx");
+  const localAddr = local?.address || (localRelay ? relayLocal?.address : null) || srflxLocal?.address;
+
+  return {
+    connectionType: (localRelay || remoteRelay) ? "relay" : "direct",
+    localCandidateType: lt ?? null,
+    remoteCandidateType: rt ?? null,
+    protocol: local?.protocol ?? null,
+    localIpFamily: ipFamily(localAddr),
+    remoteIpFamily: ipFamily(remote?.address),
+    rttMs: pair.currentRoundTripTime != null ? pair.currentRoundTripTime * 1000 : null,
+    rawStats: {
+      pair: { state: pair.state, nominated: pair.nominated, bytesReceived: pair.bytesReceived,
+              currentRoundTripTime: pair.currentRoundTripTime },
+      selectedLocal: local && { candidateType: lt, protocol: local.protocol, address: local.address,
+                                port: local.port, relayProtocol: local.relayProtocol, url: local.url },
+      selectedRemote: remote && { candidateType: rt, protocol: remote.protocol, address: remote.address, port: remote.port },
+      relayDetected: { localRelay, remoteRelay },
+      candidates: cands,
+    },
+  };
+}
+
+function showStats(t, peak, avg) {
+  const cls = t.connectionType === "relay" ? "relay" : "direct";
+  $("verdict").className = cls;
+  $("verdict").textContent =
+    `${t.connectionType.toUpperCase()} · ${t.localCandidateType}→${t.remoteCandidateType} · ` +
+    `${t.protocol} · ${t.localIpFamily || "?"}`;
+  const rows = {
+    "connection": t.connectionType, "local candidate": t.localCandidateType,
+    "remote candidate": t.remoteCandidateType, "protocol": t.protocol,
+    "local IP family": t.localIpFamily, "remote IP family": t.remoteIpFamily,
+    "RTT (ms)": t.rttMs?.toFixed(1), "peak Mbps": peak.toFixed(0), "avg Mbps": avg.toFixed(0),
+  };
+  $("stats").innerHTML = Object.entries(rows)
+    .map(([k, v]) => `<tr><td>${k}</td><td>${v ?? "—"}</td></tr>`).join("");
+}
+
+async function postTelemetry(row) {
+  const base = $("tele").value.trim().replace(/\/$/, "");
+  try {
+    const res = await fetch(base + "/telemetry/poc", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(row),
+    });
+    const j = await res.json();
+    log(res.ok ? `telemetry logged — row #${j.id}` : `telemetry POST failed: HTTP ${res.status}`);
+  } catch (e) { log("telemetry POST error: " + e.message + " (CORS? backend up?)"); }
+}
+
+$("go").onclick = () => {
+  $("go").disabled = true;
+  $("stats").innerHTML = ""; $("verdict").textContent = "";
+  const forceRelay = $("relay").checked;
+  const ws = new WebSocket($("url").value);
+  const pc = new RTCPeerConnection({
+    iceServers: iceServers(),
+    iceTransportPolicy: forceRelay ? "relay" : "all",
+  });
+  log(`connecting — policy=${forceRelay ? "relay" : "all"}, ` +
+      `iceServers=${iceServers().map(s => Array.isArray(s.urls) ? s.urls.join("|") : s.urls).join(", ")}`);
+
+  pc.oniceconnectionstatechange = () => log("ice: " + pc.iceConnectionState);
+  pc.onicecandidate = e => { if (e.candidate) ws.send(JSON.stringify({ type: "ice", candidate: e.candidate })); };
+
+  const dc = pc.createDataChannel("throughput");
+  dc.binaryType = "arraybuffer";
+
+  let bytes = 0, peak = 0, last = 0, lastT = 0, t0 = 0, tLast = 0, done = false;
+  const finalize = async () => {
+    if (done) return; done = true;
+    clearInterval(tick);
+    const avg = tLast > t0 ? (bytes * 8) / ((tLast - t0) / 1000) / 1e6 : 0;
+    log(`measured: peak ${peak.toFixed(0)} Mbps, avg ${avg.toFixed(0)} Mbps, ${(bytes/1e6).toFixed(1)} MB`);
+    const t = await classify(pc);
+    if (!t) { log("no candidate pair in getStats — cannot classify", "fail"); $("state").textContent = "no stats"; return; }
+    for (const c of t.rawStats.candidates)
+      log(`  cand ${c.side}: ${c.type} ${c.protocol} ${c.address}:${c.port}` +
+          (c.relayProtocol ? ` relayProto=${c.relayProtocol}` : ""));
+    log(`relay detected: local=${t.rawStats.relayDetected.localRelay} remote=${t.rawStats.relayDetected.remoteRelay}`);
+    showStats(t, peak, avg);
+    await postTelemetry({
+      note: $("note").value.trim() || null,
+      icePolicy: forceRelay ? "relay" : "all",
+      throughputMbps: peak, ...t,
+    });
+    $("state").textContent = "done";
+    try { ws.close(); pc.close(); } catch {}
+  };
+  let tick;
+  dc.onopen = () => {
+    log("throughput channel open — agent flooding ~15s");
+    lastT = t0 = performance.now();
+    tick = setInterval(() => {
+      const now = performance.now();
+      const delta = bytes - last;
+      const mbps = (delta * 8) / ((now - lastT) / 1000) / 1e6;
+      if (delta > 0) { tLast = now; peak = Math.max(peak, mbps); }
+      $("rate").textContent = peak.toFixed(0);
+      last = bytes; lastT = now;
+      // flood is done when bytes stop flowing for ~1.5s after data began.
+      if (t0 && now - tLast > 1500 && bytes > 0) finalize();
+    }, 500);
+    setTimeout(finalize, 25000); // hard safety cap
+  };
+  dc.onmessage = e => { bytes += e.data.byteLength; };
+
+  pc.onconnectionstatechange = () => {
+    $("state").textContent = pc.connectionState;
+    log("connection: " + pc.connectionState);
+    if (pc.connectionState === "failed") { $("verdict").className = "fail"; $("verdict").textContent = "CONNECTION FAILED"; }
+  };
+  ws.onopen = async () => {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription }));
+    log("offer sent");
+  };
+  ws.onmessage = async ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "answer") await pc.setRemoteDescription(m.sdp);
+    else if (m.type === "ice") await pc.addIceCandidate(m.candidate);
+  };
+  ws.onerror = () => log("signaling error");
+};
+</script>

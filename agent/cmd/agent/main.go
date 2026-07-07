@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,7 +114,7 @@ func main() {
 // dispatched by label: "throughput" -> flood; anything else -> HTTP tunnel.
 func newPeer(send func(Msg), client *http.Client, origin string) *webrtc.PeerConnection {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
-		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}},
+		ICEServers: iceServers(),
 	})
 	if err != nil {
 		log.Fatalf("agent: new peer: %v", err)
@@ -302,4 +303,26 @@ func env(k, def string) string {
 		return v
 	}
 	return def
+}
+
+// iceServers returns Google STUN plus, when configured, a TURN server (POC
+// step 6). TURN is opt-in via env so the default dev run stays cloud-free:
+//
+//	R8ER_ICE_URLS        comma-separated, e.g. "turn:turn.example:3478?transport=udp"
+//	R8ER_ICE_USERNAME    TURN long-term username
+//	R8ER_ICE_CREDENTIAL  TURN long-term credential
+//
+// Local coturn parity: URLS=turn:host.docker.internal:3478?transport=udp,
+// USERNAME=dev, CREDENTIAL=dev. The browser is what's forced relay-only; the
+// agent just needs a relay candidate available, so STUN always stays present.
+func iceServers() []webrtc.ICEServer {
+	servers := []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}}
+	if urls := os.Getenv("R8ER_ICE_URLS"); urls != "" {
+		servers = append(servers, webrtc.ICEServer{
+			URLs:       strings.Split(urls, ","),
+			Username:   os.Getenv("R8ER_ICE_USERNAME"),
+			Credential: os.Getenv("R8ER_ICE_CREDENTIAL"),
+		})
+	}
+	return servers
 }

@@ -22,3 +22,6 @@ TestResults/
 
 # dev-only Jellyfin creds from scripts/setup-jellyfin.sh (throwaway)
 dev/.jellyfin.json
+
+# short-lived Cloudflare TURN creds from scripts/gen-turn-creds.ps1 (throwaway)
+dev/.cloudflare-turn.json

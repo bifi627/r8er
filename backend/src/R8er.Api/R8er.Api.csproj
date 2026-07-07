@@ -10,4 +10,11 @@
     <InternalsVisibleTo Include="R8er.Api.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- POC step 6: connectivity telemetry sink. Raw ADO.NET provider (no EF) —
+         the throwaway spike table is a CREATE-IF-NOT-EXISTS + parameterized
+         insert; EF/migrations arrive when this graduates to a tenant entity. -->
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+
 </Project>
