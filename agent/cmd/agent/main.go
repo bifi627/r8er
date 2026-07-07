@@ -1,16 +1,22 @@
-// r8er host agent — POC step 3: dial the signaling server, answer a browser
-// offer, open a WebRTC data channel, and flood it to measure raw agent→browser
-// throughput (the media direction that bounds streaming). Throwaway quality:
-// no auth, no tenancy, no Jellyfin yet — just the transport ceiling.
+// r8er host agent — POC steps 3+4: dial the signaling server, answer a browser
+// offer, and serve data channels. Two roles by label: "throughput" floods the
+// channel to measure the agent→browser ceiling (step 3); any other channel is
+// an HTTP tunnel request — proxy it to the local origin (Jellyfin) and stream
+// the response back in backpressured chunks (step 4). Throwaway quality: no
+// auth, no tenancy — just the transport and the tunnel primitive.
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -33,7 +39,8 @@ const (
 
 func main() {
 	signalURL := env("R8ER_SIGNAL_URL", "wss://r8er.up.railway.app/signaling/poc")
-	log.Printf("agent: dialing %s", signalURL)
+	origin := env("R8ER_ORIGIN", "http://localhost:8096") // local Jellyfin
+	log.Printf("agent: dialing %s (tunnel origin %s)", signalURL, origin)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -52,8 +59,25 @@ func main() {
 		}
 	}
 
-	pc := newPeer(send)
-	defer pc.Close()
+	// No Client.Timeout: it caps the whole body read, which would abort a long
+	// stream mid-movie. ponytail: POC leaks a goroutine on a hung origin; a
+	// per-request context with a header-only deadline is the upgrade path.
+	// DisableCompression: a tunnel must be byte-transparent. Go's default
+	// transport auto-adds Accept-Encoding: gzip, then silently decompresses —
+	// which rewrites the body and drops Content-Length. Forward exactly what the
+	// browser asked for and hand back exactly what the origin sent.
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+
+	// One PeerConnection per session. A PC is single-use: once the browser
+	// disconnects it can't answer a new offer. Build a fresh one on each offer
+	// (closing the previous) so reloads/reconnects just work — POC is one
+	// browser at a time. ponytail: no session map until there are many peers.
+	var pc *webrtc.PeerConnection
+	defer func() {
+		if pc != nil {
+			pc.Close()
+		}
+	}()
 
 	for {
 		_, data, err := conn.Read(ctx)
@@ -68,11 +92,15 @@ func main() {
 		}
 		switch m.Type {
 		case "offer":
+			if pc != nil {
+				pc.Close()
+			}
+			pc = newPeer(send, client, origin)
 			if err := answer(pc, m.SDP, send); err != nil {
 				log.Printf("agent: answer: %v", err)
 			}
 		case "ice":
-			if m.Candidate != nil {
+			if pc != nil && m.Candidate != nil {
 				if err := pc.AddICECandidate(*m.Candidate); err != nil {
 					log.Printf("agent: add ice: %v", err)
 				}
@@ -81,9 +109,9 @@ func main() {
 	}
 }
 
-// newPeer builds the answering PeerConnection with detached data channels so
-// the flood loop gets a raw io.Writer (blocking writes apply SCTP backpressure).
-func newPeer(send func(Msg)) *webrtc.PeerConnection {
+// newPeer builds the answering PeerConnection. Inbound data channels are
+// dispatched by label: "throughput" -> flood; anything else -> HTTP tunnel.
+func newPeer(send func(Msg), client *http.Client, origin string) *webrtc.PeerConnection {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}},
 	})
@@ -105,7 +133,11 @@ func newPeer(send func(Msg)) *webrtc.PeerConnection {
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
 		log.Printf("agent: data channel %q opening", d.Label())
-		d.OnOpen(func() { flood(d) })
+		if d.Label() == "throughput" {
+			d.OnOpen(func() { flood(d) })
+			return
+		}
+		serveTunnel(d, client, origin)
 	})
 
 	return pc
@@ -130,13 +162,10 @@ func answer(pc *webrtc.PeerConnection, offer *webrtc.SessionDescription, send fu
 	return nil
 }
 
-// flood sends fixed chunks for the measurement window and logs the send-side
-// rate — the SCTP-limited throughput ceiling the browser confirms on receive.
-// Backpressure: pause when the SCTP send buffer exceeds maxBuffered, resume
-// when OnBufferedAmountLow fires. Without this the loop queues gigabytes into
-// the send buffer (the producer far outpaces the ~tens-of-MB/s SCTP drain).
-func flood(d *webrtc.DataChannel) {
-	buf := make([]byte, chunkSize)
+// gate returns a wait() to call before each Send. It blocks until the channel's
+// SCTP send buffer has drained below the low-water mark, so the producer can't
+// queue gigabytes ahead of the ~tens-of-MB/s drain (the 20GB-RAM incident).
+func gate(d *webrtc.DataChannel) func() {
 	drained := make(chan struct{}, 1)
 	d.SetBufferedAmountLowThreshold(maxBuffered / 2)
 	d.OnBufferedAmountLow(func() {
@@ -145,16 +174,25 @@ func flood(d *webrtc.DataChannel) {
 		default:
 		}
 	})
+	return func() {
+		if d.BufferedAmount() > maxBuffered {
+			<-drained
+		}
+	}
+}
+
+// flood sends fixed chunks for the measurement window and logs the send-side
+// rate — the SCTP-limited throughput ceiling the browser confirms on receive.
+func flood(d *webrtc.DataChannel) {
+	buf := make([]byte, chunkSize)
+	wait := gate(d)
 
 	log.Printf("agent: flooding %d-byte chunks for %s", chunkSize, floodFor)
 	start := time.Now()
 	deadline := start.Add(floodFor)
 	var total int64
 	for time.Now().Before(deadline) {
-		if d.BufferedAmount() > maxBuffered {
-			<-drained // wait for the buffer to drain below the low threshold
-			continue
-		}
+		wait()
 		if err := d.Send(buf); err != nil {
 			log.Printf("agent: send: %v", err)
 			break
@@ -164,6 +202,99 @@ func flood(d *webrtc.DataChannel) {
 	secs := time.Since(start).Seconds()
 	log.Printf("agent: sent %.1f MB in %.1fs = %.0f Mbps",
 		float64(total)/1e6, secs, float64(total)*8/1e6/secs)
+}
+
+// tunnelReq is the browser→agent request frame (docs/protocol.md). Body-less:
+// the POC only tunnels GETs (playlists, segments, ranged reads).
+type tunnelReq struct {
+	Method  string            `json:"method"`
+	URL     string            `json:"url"` // origin-relative, e.g. "/web/index.html"
+	Headers map[string]string `json:"headers"`
+}
+
+// serveTunnel treats the channel's first message as an HTTP request, proxies it
+// to origin, and streams the response back. One channel == one request/response;
+// closing the channel is the body's EOF marker for the browser.
+func serveTunnel(d *webrtc.DataChannel, client *http.Client, origin string) {
+	var once sync.Once
+	d.OnMessage(func(m webrtc.DataChannelMessage) {
+		once.Do(func() { go handleReq(d, client, origin, m.Data) })
+	})
+}
+
+func handleReq(d *webrtc.DataChannel, client *http.Client, origin string, raw []byte) {
+	defer d.Close()
+
+	status, hdr, body, err := proxy(client, origin, raw)
+	if err != nil {
+		log.Printf("agent: tunnel: %v", err)
+		sendHead(d, http.StatusBadGateway, nil)
+		return
+	}
+	defer body.Close()
+
+	sendHead(d, status, hdr)
+	streamBody(d, body)
+	log.Printf("agent: tunnel -> %d", status)
+}
+
+// proxy is the tunnel's pure core: decode the request frame, call origin
+// forwarding headers (Range included, so seek survives), and hand back the
+// response status/headers/body for the caller to stream. No WebRTC here, so
+// range passthrough is unit-tested directly (tunnel_test.go).
+func proxy(client *http.Client, origin string, raw []byte) (int, map[string]string, io.ReadCloser, error) {
+	var rq tunnelReq
+	if err := json.Unmarshal(raw, &rq); err != nil {
+		return 0, nil, nil, fmt.Errorf("bad request frame: %w", err)
+	}
+	req, err := http.NewRequest(rq.Method, origin+rq.URL, nil)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	for k, v := range rq.Headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	hdr := make(map[string]string, len(resp.Header)+1)
+	for k := range resp.Header {
+		hdr[k] = resp.Header.Get(k) // ponytail: last value wins; POC has no dup headers that matter
+	}
+	// Go's Transport promotes Content-Length out of Header into resp.ContentLength;
+	// re-add it so the browser (and hls.js) knows the body size. -1 = unknown.
+	if resp.ContentLength >= 0 {
+		hdr["Content-Length"] = strconv.FormatInt(resp.ContentLength, 10)
+	}
+	return resp.StatusCode, hdr, resp.Body, nil
+}
+
+func sendHead(d *webrtc.DataChannel, status int, headers map[string]string) {
+	b, _ := json.Marshal(map[string]any{"status": status, "headers": headers})
+	if err := d.SendText(string(b)); err != nil {
+		log.Printf("agent: send head: %v", err)
+	}
+}
+
+// streamBody relays the response body as backpressured binary chunks. The head
+// frame is text; body frames are binary — the browser tells them apart by type.
+func streamBody(d *webrtc.DataChannel, body io.Reader) {
+	buf := make([]byte, chunkSize)
+	wait := gate(d)
+	for {
+		n, err := body.Read(buf)
+		if n > 0 {
+			wait()
+			if e := d.Send(buf[:n]); e != nil {
+				log.Printf("agent: tunnel send body: %v", e)
+				return
+			}
+		}
+		if err != nil {
+			return // io.EOF (or read error) → defer closes the channel = EOF
+		}
+	}
 }
 
 func env(k, def string) string {

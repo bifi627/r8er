@@ -1,0 +1,122 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>r8er POC — HTTP-over-data-channel tunnel</title>
+<style>
+  body { font: 16px system-ui; max-width: 44rem; margin: 3rem auto; padding: 0 1rem; }
+  input { width: 100%; padding: .4rem; font: inherit; }
+  button { font: inherit; padding: .3rem .8rem; }
+  .pass { color: #137333; font-weight: 600; }
+  .fail { color: #c5221f; font-weight: 600; }
+  #log { white-space: pre-wrap; color: #444; font: 13px monospace; margin-top: 1rem; }
+</style>
+
+<h1>r8er tunnel — range passthrough proof</h1>
+<p>Start the agent (origin = local Jellyfin), then Connect. This opens one data
+channel per HTTP request, tunnels it to the agent's origin, and checks that a
+full GET and a ranged GET come back intact — i.e. <b>seek survives the tunnel</b>.</p>
+
+<label>Signaling URL
+  <input id="url" value="wss://r8er.up.railway.app/signaling/poc" />
+</label>
+<label>Test path (origin-relative, range-capable, no auth)
+  <input id="path" value="/web/index.html" />
+</label>
+<p><button id="go">Connect &amp; run</button> <span id="state">idle</span></p>
+<div id="log"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = (m, cls) => {
+  const line = cls ? `<span class="${cls}">${m}</span>` : m;
+  $("log").insertAdjacentHTML("beforeend", line + "\n");
+};
+
+// tunnelFetch: one data channel per request. Send the request as a text frame;
+// the agent replies with a text head frame {status, headers} then binary body
+// chunks, then closes the channel (close == body EOF). Mirrors docs/protocol.md.
+function tunnelFetch(pc, url, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const dc = pc.createDataChannel("req:" + url + ":" + performance.now());
+    dc.binaryType = "arraybuffer";
+    let head = null;
+    const chunks = [];
+    dc.onopen = () => dc.send(JSON.stringify({
+      method: opts.method || "GET", url, headers: opts.headers || {},
+    }));
+    dc.onmessage = e => {
+      if (head === null && typeof e.data === "string") head = JSON.parse(e.data);
+      else chunks.push(new Uint8Array(e.data));
+    };
+    dc.onclose = () => {
+      if (head === null) return reject(new Error("channel closed with no response head"));
+      const len = chunks.reduce((n, c) => n + c.length, 0);
+      const body = new Uint8Array(len);
+      let off = 0;
+      for (const c of chunks) { body.set(c, off); off += c.length; }
+      resolve({ status: head.status, headers: head.headers || {}, body });
+    };
+    dc.onerror = ev => reject(new Error("data channel error: " + (ev.error || ev.message || "?")));
+  });
+}
+
+// case-insensitive header lookup (agent forwards Jellyfin's original casing)
+const h = (headers, name) => {
+  const k = Object.keys(headers).find(k => k.toLowerCase() === name.toLowerCase());
+  return k ? headers[k] : undefined;
+};
+
+async function run(pc) {
+  const path = $("path").value;
+  let ok = true;
+  const check = (cond, msg) => { log((cond ? "  ✓ " : "  ✗ ") + msg, cond ? "pass" : "fail"); ok = ok && cond; };
+
+  // 1. Full GET — the baseline the ranged read must agree with.
+  log("GET " + path);
+  const full = await tunnelFetch(pc, path);
+  check(full.status === 200, `status 200 (got ${full.status})`);
+  const clen = Number(h(full.headers, "content-length"));
+  check(full.body.length === clen, `body ${full.body.length} B matches Content-Length ${clen}`);
+
+  // 2. Ranged GET — the seek path. Must be 206, exactly 100 bytes, and those
+  //    bytes must equal the first 100 of the full body (proves no corruption).
+  log("GET " + path + "  Range: bytes=0-99");
+  const part = await tunnelFetch(pc, path, { headers: { Range: "bytes=0-99" } });
+  check(part.status === 206, `status 206 Partial Content (got ${part.status})`);
+  check(part.body.length === 100, `body is 100 B (got ${part.body.length})`);
+  check(!!h(part.headers, "content-range"), `Content-Range present: ${h(part.headers, "content-range")}`);
+  const same = part.body.every((b, i) => b === full.body[i]);
+  check(same, "ranged bytes equal the first 100 bytes of the full body");
+
+  log(ok ? "\nTUNNEL OK — range passes through, seek survives." : "\nTUNNEL FAILED — see ✗ above.", ok ? "pass" : "fail");
+}
+
+$("go").onclick = () => {
+  $("go").disabled = true;
+  const ws = new WebSocket($("url").value);
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+  pc.onconnectionstatechange = () => {
+    $("state").textContent = pc.connectionState;
+    if (pc.connectionState === "connected") run(pc).catch(e => log("ERROR: " + e.message, "fail"));
+    if (pc.connectionState === "failed") log("connection failed", "fail");
+  };
+  pc.onicecandidate = e => {
+    if (e.candidate) ws.send(JSON.stringify({ type: "ice", candidate: e.candidate }));
+  };
+
+  ws.onopen = async () => {
+    // A data channel must exist before createOffer so SCTP is negotiated; the
+    // real request channels are opened later, per request, over that association.
+    pc.createDataChannel("bootstrap");
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription }));
+  };
+  ws.onmessage = async ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "answer") await pc.setRemoteDescription(m.sdp);
+    else if (m.type === "ice") await pc.addIceCandidate(m.candidate);
+  };
+  ws.onerror = () => log("signaling error", "fail");
+};
+</script>
