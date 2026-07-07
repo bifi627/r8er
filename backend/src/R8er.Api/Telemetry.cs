@@ -115,20 +115,21 @@ public sealed class Telemetry
         await using var cmd = _db.CreateCommand(sql);
         cmd.Parameters.AddWithValue(limit);
         var rows = new List<TelemetryListRow>();
-        int direct = 0, relay = 0;
+        int direct = 0, relay = 0, failed = 0;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             var type = Str(reader, 4);
             if (type == "direct") direct++;
             else if (type == "relay") relay++;
+            else if (type == "failed") failed++;
             rows.Add(new TelemetryListRow(
                 reader.GetInt64(0), reader.GetDateTime(1), Str(reader, 2), Str(reader, 3),
                 type, Str(reader, 5), Str(reader, 6), Str(reader, 7), Str(reader, 8), Str(reader, 9),
                 reader.IsDBNull(10) ? null : reader.GetDouble(10),
                 reader.IsDBNull(11) ? null : reader.GetDouble(11)));
         }
-        return new TelemetryList(new TelemetrySummary(direct + relay, direct, relay), rows);
+        return new TelemetryList(new TelemetrySummary(direct + relay + failed, direct, relay, failed), rows);
     }
 
     private static string? Str(NpgsqlDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
@@ -160,7 +161,7 @@ public sealed record TelemetryRow
 
 public sealed record TelemetryList(TelemetrySummary Summary, IReadOnlyList<TelemetryListRow> Rows);
 
-public sealed record TelemetrySummary(int Total, int Direct, int Relay);
+public sealed record TelemetrySummary(int Total, int Direct, int Relay, int Failed);
 
 public sealed record TelemetryListRow(
     long Id, DateTime CreatedAt, string? Note, string? IcePolicy, string? ConnectionType,

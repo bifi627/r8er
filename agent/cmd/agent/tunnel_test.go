@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"bytes"
+
+	"github.com/coder/websocket"
 )
 
 // The tunnel's whole reason to exist is that seek survives it: a Range request
@@ -48,6 +52,31 @@ func TestProxyRangePassthrough(t *testing.T) {
 	}
 	if hdr["Content-Range"] == "" {
 		t.Fatalf("missing Content-Range header: %v", hdr)
+	}
+}
+
+// When the signaling socket drops, runSession must RETURN (so main's reconnect
+// loop can re-dial) — not hang and not exit the process. This is the crash the
+// agent hit: an idle socket got reaped and the old code fell out of main.
+func TestRunSessionReturnsOnDrop(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		c.Close(websocket.StatusNormalClosure, "bye") // drop it immediately
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := runSession(ctx, wsURL, "http://unused", http.DefaultClient); err == nil {
+		t.Fatal("runSession returned nil; want the socket-closed error that drives a reconnect")
+	}
+	if ctx.Err() != nil {
+		t.Fatal("runSession hung until ctx timeout instead of returning on the drop")
 	}
 }
 

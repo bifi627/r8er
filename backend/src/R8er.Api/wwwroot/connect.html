@@ -238,10 +238,22 @@ $("go").onclick = () => {
   };
   dc.onmessage = e => { bytes += e.data.byteLength; };
 
-  pc.onconnectionstatechange = () => {
+  pc.onconnectionstatechange = async () => {
     $("state").textContent = pc.connectionState;
     log("connection: " + pc.connectionState);
-    if (pc.connectionState === "failed") { $("verdict").className = "fail"; $("verdict").textContent = "CONNECTION FAILED"; }
+    if (pc.connectionState === "failed" && !done) {
+      // A network where no pair connects at all is the worst — and most
+      // valuable — outcome; log it or the checkpoint rate overcounts success.
+      done = true;
+      clearInterval(tick);
+      $("verdict").className = "fail"; $("verdict").textContent = "CONNECTION FAILED";
+      await postTelemetry({
+        note: $("note").value.trim() || null,
+        icePolicy: forceRelay ? "relay" : "all",
+        connectionType: "failed",
+      });
+      try { ws.close(); pc.close(); } catch {}
+    }
   };
   ws.onopen = async () => {
     const offer = await pc.createOffer();

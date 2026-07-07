@@ -46,9 +46,51 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	// No Client.Timeout: it caps the whole body read, which would abort a long
+	// stream mid-movie. ponytail: POC leaks a goroutine on a hung origin; a
+	// per-request context with a header-only deadline is the upgrade path.
+	// DisableCompression: a tunnel must be byte-transparent. Go's default
+	// transport auto-adds Accept-Encoding: gzip, then silently decompresses —
+	// which rewrites the body and drops Content-Length. Forward exactly what the
+	// browser asked for and hand back exactly what the origin sent.
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+
+	// Reconnect loop. The signaling WS is long-lived and mostly idle (the owner
+	// connects rarely), and Railway's edge reaps idle sockets — so the socket
+	// WILL drop. A home agent must survive that unattended, so reconnect with
+	// backoff instead of exiting. A session that stayed up a while resets the
+	// backoff; a fast-failing dial keeps backing off up to 30s.
+	backoff := time.Second
+	for ctx.Err() == nil {
+		start := time.Now()
+		if err := runSession(ctx, signalURL, origin, client); err != nil {
+			log.Printf("agent: %v", err)
+		}
+		if ctx.Err() != nil {
+			return // Ctrl+C
+		}
+		if time.Since(start) > 30*time.Second {
+			backoff = time.Second // the connection was healthy; treat this as a fresh drop
+		}
+		log.Printf("agent: reconnecting in %s", backoff)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, 30*time.Second)
+	}
+}
+
+// runSession dials the signaling server and serves offers until the socket
+// drops, returning the error that ended it. One PeerConnection per session: a
+// PC is single-use (once the browser disconnects it can't answer a new offer),
+// so build a fresh one on each offer, closing the previous. POC is one browser
+// at a time. ponytail: no session map until there are many peers.
+func runSession(ctx context.Context, signalURL, origin string, client *http.Client) error {
 	conn, _, err := websocket.Dial(ctx, signalURL, nil)
 	if err != nil {
-		log.Fatalf("agent: dial signaling: %v", err)
+		return fmt.Errorf("dial signaling: %w", err)
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(1 << 20) // SDP exceeds the 32KB default read limit
@@ -60,19 +102,14 @@ func main() {
 		}
 	}
 
-	// No Client.Timeout: it caps the whole body read, which would abort a long
-	// stream mid-movie. ponytail: POC leaks a goroutine on a hung origin; a
-	// per-request context with a header-only deadline is the upgrade path.
-	// DisableCompression: a tunnel must be byte-transparent. Go's default
-	// transport auto-adds Accept-Encoding: gzip, then silently decompresses —
-	// which rewrites the body and drops Content-Length. Forward exactly what the
-	// browser asked for and hand back exactly what the origin sent.
-	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	// Keepalive: coder/websocket sends no automatic pings, so an idle session
+	// gets reaped by Railway's edge (the 10-min-idle EOF). Ping periodically to
+	// keep it alive; Ping needs the Read loop below to process the pong, so it
+	// runs concurrently and stops when the session ends.
+	sctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go keepAlive(sctx, conn)
 
-	// One PeerConnection per session. A PC is single-use: once the browser
-	// disconnects it can't answer a new offer. Build a fresh one on each offer
-	// (closing the previous) so reloads/reconnects just work — POC is one
-	// browser at a time. ponytail: no session map until there are many peers.
 	var pc *webrtc.PeerConnection
 	defer func() {
 		if pc != nil {
@@ -83,8 +120,7 @@ func main() {
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
-			log.Printf("agent: ws closed: %v", err)
-			return
+			return fmt.Errorf("ws closed: %w", err)
 		}
 		var m Msg
 		if err := json.Unmarshal(data, &m); err != nil {
@@ -96,7 +132,14 @@ func main() {
 			if pc != nil {
 				pc.Close()
 			}
-			pc = newPeer(send, client, origin)
+			var err error
+			pc, err = newPeer(send, client, origin)
+			if err != nil {
+				// A single bad offer must not take the agent down — log and
+				// wait for the next one. This runs on every browser connect.
+				log.Printf("agent: new peer: %v", err)
+				continue
+			}
 			if err := answer(pc, m.SDP, send); err != nil {
 				log.Printf("agent: answer: %v", err)
 			}
@@ -110,14 +153,36 @@ func main() {
 	}
 }
 
+// keepAlive pings every 20s so an idle signaling socket isn't reaped by the
+// edge proxy. A failed ping means the socket is already gone — return and let
+// the Read loop surface the error and trigger a reconnect.
+func keepAlive(ctx context.Context, conn *websocket.Conn) {
+	t := time.NewTicker(20 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			err := conn.Ping(pctx)
+			cancel()
+			if err != nil {
+				log.Printf("agent: keepalive ping failed: %v", err)
+				return
+			}
+		}
+	}
+}
+
 // newPeer builds the answering PeerConnection. Inbound data channels are
 // dispatched by label: "throughput" -> flood; anything else -> HTTP tunnel.
-func newPeer(send func(Msg), client *http.Client, origin string) *webrtc.PeerConnection {
+func newPeer(send func(Msg), client *http.Client, origin string) (*webrtc.PeerConnection, error) {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers(),
 	})
 	if err != nil {
-		log.Fatalf("agent: new peer: %v", err)
+		return nil, err
 	}
 
 	pc.OnICECandidate(func(c *webrtc.ICECandidate) {
@@ -141,7 +206,7 @@ func newPeer(send func(Msg), client *http.Client, origin string) *webrtc.PeerCon
 		serveTunnel(d, client, origin)
 	})
 
-	return pc
+	return pc, nil
 }
 
 func answer(pc *webrtc.PeerConnection, offer *webrtc.SessionDescription, send func(Msg)) error {
