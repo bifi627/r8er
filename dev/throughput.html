@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>r8er POC — data-channel throughput</title>
+<style>
+  body { font: 16px system-ui; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+  #rate { font-size: 3rem; font-variant-numeric: tabular-nums; }
+  input { width: 100%; padding: .4rem; font: inherit; }
+  #log { white-space: pre-wrap; color: #666; font: 13px monospace; margin-top: 1rem; }
+</style>
+
+<h1>r8er data-channel throughput</h1>
+<p>Start the agent first, then click Connect. The agent floods the channel; this
+page measures how fast bytes arrive (agent → browser).</p>
+
+<label>Signaling URL
+  <input id="url" value="wss://r8er.up.railway.app/signaling/poc" />
+</label>
+<p><button id="go">Connect</button> <span id="state">idle</span></p>
+
+<div><span id="rate">0</span> <span>Mbps</span></div>
+<div>peak: <span id="peak">0</span> Mbps · total: <span id="total">0</span> MB</div>
+<div id="log"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = m => { $("log").textContent += m + "\n"; };
+
+$("go").onclick = () => {
+  $("go").disabled = true;
+  const ws = new WebSocket($("url").value);
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  });
+
+  pc.onconnectionstatechange = () => {
+    $("state").textContent = pc.connectionState;
+    log("connection: " + pc.connectionState);
+  };
+  pc.onicecandidate = e => {
+    if (e.candidate) ws.send(JSON.stringify({ type: "ice", candidate: e.candidate }));
+  };
+
+  // Browser is the offerer and owns the data channel.
+  const dc = pc.createDataChannel("throughput");
+  dc.binaryType = "arraybuffer";
+
+  let bytes = 0, peak = 0, last = 0, lastT = 0;
+  dc.onopen = () => {
+    log("data channel open — measuring");
+    lastT = performance.now();
+    const tick = setInterval(() => {
+      const now = performance.now();
+      const mbps = ((bytes - last) * 8) / ((now - lastT) / 1000) / 1e6;
+      peak = Math.max(peak, mbps);
+      $("rate").textContent = mbps.toFixed(0);
+      $("peak").textContent = peak.toFixed(0);
+      $("total").textContent = (bytes / 1e6).toFixed(1);
+      last = bytes; lastT = now;
+    }, 500);
+    dc.onclose = () => { clearInterval(tick); log("data channel closed"); };
+  };
+  dc.onmessage = e => { bytes += e.data.byteLength; };
+
+  ws.onopen = async () => {
+    log("signaling open — sending offer");
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription }));
+  };
+  ws.onmessage = async ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "answer") await pc.setRemoteDescription(m.sdp);
+    else if (m.type === "ice") await pc.addIceCandidate(m.candidate);
+  };
+  ws.onclose = () => log("signaling closed");
+  ws.onerror = () => log("signaling error");
+};
+</script>

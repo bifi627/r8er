@@ -18,3 +18,4 @@ dev-media/
 # IDE
 .vs/
 .idea/
+TestResults/

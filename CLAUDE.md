@@ -57,8 +57,8 @@ everything runs locally against emulator/containers.
 ## Machine notes
 
 - Primary dev machine is Windows 10 + Git Bash + Docker Desktop (WSL2).
-  **Go is NOT installed on it** — Go work needs the devcontainer or a Go
-  install. .NET 10 SDK, Node 24, Docker are present.
+  Go 1.26, .NET 10 SDK, Node 24, Docker are present — agent work runs locally
+  now (the devcontainer remains for CI parity / clean-room builds).
 - `.slnx` (not `.sln`) — .NET 10's solution format.
 - `frontend/.npmrc` hardens npm: `ignore-scripts=true`, `min-release-age=7`.
   Keep this in every new package dir (e2e/ etc.). If `npm install` fails

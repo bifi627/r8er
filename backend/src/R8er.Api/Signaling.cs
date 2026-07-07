@@ -10,11 +10,11 @@ namespace R8er.Api;
 public static class SignalingHub
 {
     // room id -> the (<=2) sockets currently in it
-    private static readonly ConcurrentDictionary<string, Room> Rooms = new();
+    private static readonly ConcurrentDictionary<string, Room<WebSocket>> Rooms = new();
 
     public static async Task RunAsync(string room, WebSocket socket, CancellationToken ct)
     {
-        var r = Rooms.GetOrAdd(room, _ => new Room());
+        var r = Rooms.GetOrAdd(room, _ => new Room<WebSocket>());
         if (!r.TryJoin(socket))
         {
             // ponytail: POC is exactly two peers per room; reject the third.
@@ -41,8 +41,10 @@ public static class SignalingHub
                         msg.MessageType, msg.EndOfMessage, ct);
             }
         }
-        catch (OperationCanceledException) { /* server shutdown / client abort */ }
-        catch (WebSocketException) { /* peer vanished mid-frame */ }
+        // A per-connection relay must never crash the process. Any error (peer
+        // vanished mid-frame, socket disposed during teardown, cancellation)
+        // just drops this connection. ponytail: blanket catch is correct here.
+        catch (Exception) { }
         finally
         {
             r.Leave(socket);
@@ -50,12 +52,15 @@ public static class SignalingHub
         }
     }
 
-    private sealed class Room
+    // Two-peer rendezvous slots. Generic over the peer type so the cap +
+    // isolation invariant is unit-tested directly (RoomTests) without spinning
+    // up WebSockets/TestServer. The live wire path is covered by the Railway E2E.
+    internal sealed class Room<T> where T : class
     {
-        private readonly WebSocket?[] _slots = new WebSocket?[2];
+        private readonly T?[] _slots = new T?[2];
         private readonly Lock _lock = new();
 
-        public bool TryJoin(WebSocket s)
+        public bool TryJoin(T s)
         {
             lock (_lock)
             {
@@ -65,13 +70,13 @@ public static class SignalingHub
             }
         }
 
-        public WebSocket? Other(WebSocket s)
+        public T? Other(T s)
         {
             lock (_lock)
                 return _slots[0] == s ? _slots[1] : _slots[0];
         }
 
-        public void Leave(WebSocket s)
+        public void Leave(T s)
         {
             lock (_lock)
                 for (var i = 0; i < 2; i++)
