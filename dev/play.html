@@ -1,0 +1,174 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>r8er POC — HLS playback through the tunnel</title>
+<!-- hls.js via CDN: this is a throwaway dev harness (file://), not the product.
+     The MVP React client takes hls.js as a pinned npm dep. -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<style>
+  body { font: 16px system-ui; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  video { width: 100%; background: #000; border-radius: 6px; }
+  label { display: block; margin: .4rem 0; }
+  input { width: 100%; padding: .4rem; font: inherit; }
+  button { font: inherit; padding: .35rem .9rem; }
+  .row { display: flex; gap: .5rem; align-items: center; margin: .6rem 0; flex-wrap: wrap; }
+  #log { white-space: pre-wrap; color: #444; font: 13px monospace; margin-top: 1rem; max-height: 16rem; overflow: auto; }
+  .pass { color: #137333; font-weight: 600; }
+  .fail { color: #c5221f; font-weight: 600; }
+</style>
+
+<h1>r8er — real HLS playback through the tunnel</h1>
+<p>Jellyfin transcodes the clip to HLS; hls.js plays it, but every playlist and
+segment is fetched over the WebRTC data channel via a custom loader — no direct
+network path to Jellyfin. Start the agent, run <code>setup-jellyfin.sh</code>,
+then fill in the item id + api key it printed (or open this page with
+<code>#item=…&key=…</code> in the URL).</p>
+
+<label>Signaling URL <input id="url" value="wss://r8er.up.railway.app/signaling/poc" /></label>
+<div class="row">
+  <label style="flex:2">Item ID <input id="item" placeholder="from setup-jellyfin.sh" /></label>
+  <label style="flex:2">API key <input id="key" placeholder="from setup-jellyfin.sh" /></label>
+</div>
+<div class="row">
+  <button id="go">Connect &amp; play</button>
+  <button id="seek" disabled>Seek to 5:00</button>
+  <span id="state">idle</span>
+</div>
+
+<video id="v" controls playsinline></video>
+<div id="log"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const log = (m, cls) => $("log").insertAdjacentHTML("beforeend", (cls ? `<span class="${cls}">${m}</span>` : m) + "\n");
+
+// hash convenience: #item=…&key=…&signal=… (keeps the dev token out of git)
+const hash = new URLSearchParams(location.hash.slice(1));
+for (const k of ["item", "key"]) if (hash.get(k)) $(k).value = hash.get(k);
+if (hash.get("signal")) $("url").value = hash.get("signal");
+
+// Sentinel origin: hls.js resolves relative playlist/segment URLs against the
+// master's base, so give it a host that can NEVER be fetched directly — the
+// loader strips it back to an origin-relative path and tunnels it. Proves
+// nothing bypasses the data channel.
+const TUNNEL_ORIGIN = "https://jellyfin.tunnel";
+
+// --- one data channel per request (identical to dev/tunnel.html) ------------
+function tunnelFetch(pc, url, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const dc = pc.createDataChannel("req:" + performance.now() + ":" + Math.trunc(url.length));
+    dc.binaryType = "arraybuffer";
+    let head = null;
+    const chunks = [];
+    dc.onopen = () => dc.send(JSON.stringify({ method: "GET", url, headers: opts.headers || {} }));
+    dc.onmessage = e => {
+      if (head === null && typeof e.data === "string") head = JSON.parse(e.data);
+      else chunks.push(new Uint8Array(e.data));
+    };
+    dc.onclose = () => {
+      if (head === null) return reject(new Error("no response head"));
+      const len = chunks.reduce((n, c) => n + c.length, 0);
+      const body = new Uint8Array(len);
+      let off = 0; for (const c of chunks) { body.set(c, off); off += c.length; }
+      resolve({ status: head.status, headers: head.headers || {}, body });
+    };
+    dc.onerror = () => reject(new Error("data channel error"));
+  });
+}
+
+// --- hls.js custom loader: route every load through the tunnel --------------
+function makeLoader(pc) {
+  return class TunnelLoader {
+    constructor() {
+      this.stats = { aborted: false, loaded: 0, total: 0, retry: 0, chunkCount: 0, bwEstimate: 0,
+        loading: { start: 0, first: 0, end: 0 }, parsing: { start: 0, end: 0 }, buffering: { start: 0, first: 0, end: 0 } };
+    }
+    destroy() {}
+    abort() { this.stats.aborted = true; }
+    load(context, config, callbacks) {
+      const { url, responseType } = context;
+      const path = url.replace(/^https?:\/\/[^/]+/, ""); // strip sentinel host → origin-relative
+      const headers = {};
+      if (context.rangeStart != null || context.rangeEnd != null) {
+        // hls.js rangeEnd is exclusive; HTTP Range end is inclusive.
+        headers.Range = `bytes=${context.rangeStart || 0}-${context.rangeEnd ? context.rangeEnd - 1 : ""}`;
+      }
+      this.stats.loading.start = performance.now();
+      tunnelFetch(pc, path, { headers }).then(res => {
+        if (this.stats.aborted) return;
+        const now = performance.now();
+        this.stats.loading.first = this.stats.loading.end = now;
+        this.stats.loaded = this.stats.total = res.body.length;
+        if (res.status < 200 || res.status >= 400) {
+          callbacks.onError({ code: res.status, text: "tunnel HTTP " + res.status }, context, null, this.stats);
+          return;
+        }
+        const data = responseType === "arraybuffer"
+          ? res.body.buffer.slice(res.body.byteOffset, res.body.byteOffset + res.body.byteLength)
+          : new TextDecoder().decode(res.body);
+        callbacks.onSuccess({ url, data }, this.stats, context, null);
+      }).catch(err => {
+        if (!this.stats.aborted) callbacks.onError({ code: 0, text: String(err) }, context, null, this.stats);
+      });
+    }
+  };
+}
+
+function startPlayback(pc) {
+  const item = $("item").value.trim(), key = $("key").value.trim();
+  if (!item || !key) { log("need item id + api key (run setup-jellyfin.sh)", "fail"); return; }
+  if (!window.Hls || !Hls.isSupported()) { log("hls.js/MSE not supported in this browser", "fail"); return; }
+
+  const master = `${TUNNEL_ORIGIN}/Videos/${item}/master.m3u8` +
+    `?mediaSourceId=${item}&deviceId=r8er-poc&api_key=${key}&videoCodec=h264&audioCodec=aac`;
+  log("loading HLS through the tunnel: /Videos/" + item + "/master.m3u8");
+
+  const hls = new Hls({ loader: makeLoader(pc), enableWorker: true });
+  const v = $("v");
+  hls.attachMedia(v);
+  hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(master));
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    log("manifest parsed — starting playback", "pass");
+    $("seek").disabled = false;
+    v.play().catch(e => log("autoplay blocked (press play): " + e.message));
+  });
+  hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => log(`playlist loaded: ${d.details.totalduration.toFixed(0)}s, ${d.details.fragments.length} segments`));
+  hls.on(Hls.Events.FRAG_BUFFERED, (_e, d) => log(`  buffered segment ${d.frag.sn} (${(d.frag.start).toFixed(0)}s)`));
+  hls.on(Hls.Events.ERROR, (_e, d) => {
+    log(`hls error: ${d.type}/${d.details}${d.fatal ? " FATAL" : ""}`, d.fatal ? "fail" : null);
+  });
+
+  let seekAt = 0;
+  $("seek").onclick = () => { seekAt = performance.now(); v.currentTime = 300; log("seeking to 5:00…"); };
+  v.addEventListener("seeked", () => {
+    const dt = seekAt ? ` (${Math.round(performance.now() - seekAt)}ms)` : "";
+    log(`SEEK OK — now at ${v.currentTime.toFixed(1)}s${dt}`, "pass");
+  });
+  window.__hls = hls;
+}
+
+$("go").onclick = () => {
+  $("go").disabled = true;
+  const ws = new WebSocket($("url").value);
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+  pc.onconnectionstatechange = () => {
+    $("state").textContent = pc.connectionState;
+    if (pc.connectionState === "connected") { log("tunnel connected", "pass"); startPlayback(pc); }
+    if (pc.connectionState === "failed") log("connection failed", "fail");
+  };
+  pc.onicecandidate = e => { if (e.candidate) ws.send(JSON.stringify({ type: "ice", candidate: e.candidate })); };
+
+  ws.onopen = async () => {
+    pc.createDataChannel("bootstrap"); // force SCTP into the offer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription }));
+  };
+  ws.onmessage = async ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === "answer") await pc.setRemoteDescription(m.sdp);
+    else if (m.type === "ice") await pc.addIceCandidate(m.candidate);
+  };
+  ws.onerror = () => log("signaling error", "fail");
+};
+</script>

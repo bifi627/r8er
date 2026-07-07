@@ -19,3 +19,6 @@ dev-media/
 .vs/
 .idea/
 TestResults/
+
+# dev-only Jellyfin creds from scripts/setup-jellyfin.sh (throwaway)
+dev/.jellyfin.json
