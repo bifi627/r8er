@@ -2,42 +2,45 @@
 
 Status doc for **Phase 0, step 6** of the implementation plan: measure the
 real-world direct-vs-relay rate for the flagship path (**phone on cellular →
-home agent**) and confirm TURN fallback. This is the instrument + the data so
-far; **Checkpoint 1** is not yet closed — it needs a bigger sample.
+home agent**) and confirm TURN fallback. **The connectivity criterion of
+Checkpoint 1 is now MET** (see verdict); the remaining checkpoint items
+(real-media 1080p/subtitle, 4K, codec census, iOS Safari) are still open.
 
-_Last updated: 2026-07-07. Repo state: `feat: signaling poc part 8`._
+_Last updated: 2026-07-08. Repo state: `feat: signaling poc part 8`._
 
 ## TL;DR
 
 - **6a (instrument + local relay proof): DONE.** Telemetry sink → Postgres,
   a browser harness that classifies each session (direct/relay, IPv4/v6,
   negotiated path, throughput), verified locally against coturn.
-- **6b (real field test): IN PROGRESS.** Deployed to Railway with Cloudflare
-  TURN. **Both paths proven on real infra:** cellular UDP hole-punch went
-  *direct* (row #4), Cloudflare relay carries a forced session (row #6).
-- **Blocking Checkpoint 1:** only **1 meaningful away pair** collected so far.
-  Need **≥10** (cellular ×N, friends' Wi-Fi, café) to state a real rate.
+- **6b (real field test): DONE — 14 away sessions across 9 networks.**
+  **Direct rate 86% (sessions) / 89% (distinct networks); cellular 100% direct;
+  TURN fallback fired naturally on the one network that blocked hole-punch.**
 
-## What's proven (data so far)
+## Verdict (Checkpoint-1 connectivity criterion: MET)
 
 Read live: `GET https://r8er.up.railway.app/telemetry/poc` (returns rows + a
-`{total, direct, relay, failed}` summary).
+`{total, direct, relay, failed}` summary). Rate excludes `home-*`/LAN rows and
+the forced `&relay=1` sanity row (#6).
 
-| # | note | conn | path | throughput | RTT | meaning |
-|---|------|------|------|-----------|-----|---------|
-| 1–2 | home-lan | direct | host→host | ~330 Mbps | 0 ms | LAN baseline (trivial) |
-| 3,5 | home-wlan-phone | direct | host→host | 209–240 Mbps | 4–29 ms | phone on home Wi-Fi = LAN (trivial) |
-| **4** | **Mobile-phone (cellular)** | **direct** | prflx→srflx | **30 Mbps** | 67 ms | **cellular hole-punched through CGNAT — no relay** |
-| **6** | home-wlan-phone (`&relay=1`) | **relay** | relay→prflx | 49 Mbps | 65 ms | **Cloudflare TURN relays correctly** (forced; excluded from rate) |
+| Metric | Result |
+|---|---|
+| Away sessions | 14 → **12 direct / 2 relay / 0 failed = 86% direct** |
+| Distinct away networks | 9 → **8 direct / 1 relay = 89%** |
+| **Cellular paths** (Mobile-phone ×N + hotspots, #4/10/11/16/18/19/22) | **all direct, 0 relay** |
+| TURN fallback | **Confirmed naturally** — Dehner garden-center guest Wi-Fi behind a T-Mobile AP (#14/#15) was the *only* network that blocked hole-punch; both relayed cleanly via Cloudflare at 37–40 Mbps |
 
 Takeaways:
-- The **flagship worst case worked direct on the first cellular sample** — free,
-  private (0 bytes through r8er/Cloudflare), 30 Mbps (comfortable 1080p). One
-  sample only; do **not** anchor on it.
+- **The flagship path (cellular → home) went direct on every sample.** Free,
+  private (0 bytes through r8er/Cloudflare), 5–32 Mbps — comfortable 1080p.
+- **TURN is a real, exercised fallback, not a hypothesis** — one hostile guest
+  network (captive T-Mobile AP) needed it and it worked.
+- **Connectivity ≠ bandwidth (record this):** #23 `Vs-free-wlan` connected
+  *direct* but at **0.79 Mbps / 130 ms** — a public Wi-Fi with a tiny pipe.
+  Some networks won't sustain 1080p (~5 Mbps) regardless of path. That's an
+  argument for adaptive bitrate / transcode at MVP, not a tunnel problem.
 - The data-channel SCTP ceiling (~330 Mbps on LAN) is **not** the bottleneck;
   the network is. 4K verdict is bandwidth-bound, not stack-bound.
-- Row #6's 49 Mbps relay is over **home Wi-Fi** legs, so it's optimistic — a
-  real *cellular* relay will be slower (still ≥1080p expected).
 
 ## Operating the instrument
 
@@ -116,11 +119,37 @@ candidate is a black hole.
 
 ## What's left for Checkpoint 1
 
-- [ ] **≥10 away network pairs** (the current gap) → real direct-vs-relay rate.
-      Cellular is the one that matters; also friends' + public Wi-Fi.
-- [ ] **Sustained 1080p + a subtitle track over the away path**, driven through
-      the real player (`dev/play.html` via the tunnel). Note: current dev-media
-      fixtures are 720p / no subtitles — need real 1080p+subtitle media.
+- [x] **≥10 away network pairs → real direct-vs-relay rate.** DONE: 14 sessions
+      across 9 networks, 86% direct / cellular 100% direct, TURN fired once. See
+      verdict above.
+- [x] **Sustained 1080p + a subtitle track over the away path — DONE.** Driven
+      end-to-end through the tunnel on mobile: **1080p held** (306 s played, ~43 s
+      buffered ahead, 3 startup stalls totalling ~1 s, seek-to-5:00 in 594 ms) and
+      **subtitles render** (WebVTT rendition fetched over the data channel,
+      `mode=showing`). Two noted non-blockers: hls.js cold-start skips subtitle
+      segment 0 (the @2 s cue) — its scheduler aligned to the forward buffer edge
+      during startup stalls, not a tunnel fault, a tuned MVP player avoids it; and
+      a transient `STUN 701` DNS hiccup that ICE recovered from (add
+      `stun1–4.l.google.com` if it ever persists on an away network). Instrument
+      details below.
+      - `scripts/gen-test-media.sh` now emits `h264-1080p-subs.mp4` (**CBR ~6 Mbps**
+        1080p, so it stresses the network — testsrc would otherwise compress to
+        ~1 Mbps) + a sidecar `.srt`.
+      - `setup-jellyfin.sh` indexes the sidecar as a subtitle stream and prints a
+        phone play URL (`/play.html#item=…&key=…&subs=…`). It now selects fixtures
+        by **file Path** — Jellyfin's metadata matcher collapses all H.264 clips
+        to one Name, so Name-based selection aliased them.
+      - Verified by direct curl (no browser): `master.m3u8?SubtitleStreamIndex=0&`
+        `SubtitleMethod=Hls` returns a `TYPE=SUBTITLES` WebVTT rendition alongside
+        a `RESOLUTION=1920x1080` video with `audioCodec=copy` → **remux, not a
+        transcode** (network-bound, the intended test).
+      - `play.html` moved to `wwwroot/` (phone loads it same-origin, like
+        connect.html), turns on the hls.js subtitle track, and **measures** stalls
+        / stalled time / buffer-ahead / subtitle-cue count so "sustained" is data,
+        not a claim. Relay-needing networks: append `&turn=&user=&cred=`.
+      - **Pending:** open the phone URL on the away path, confirm smooth 1080p +
+        visible subtitles + seek. **Needs a Railway redeploy first** (play.html is
+        a new static file) — human-approved.
 - [ ] **4K verdict** (feasible / needs native app) — bandwidth-bound; record the
       real cellular-direct throughput distribution.
 - [ ] **Tunnel approach confirmed on target browsers** (Checkpoint-1 exit
@@ -135,9 +164,11 @@ candidate is a black hole.
 
 ## Caveats
 
-- 1 cellular sample; the rate is unknown until the sample grows. Feasibility doc
-  explicitly warns cellular-to-home direct rate is unmeasured — treat it so.
-- Relay throughput (#6) measured over Wi-Fi legs, not a real cellular relay.
+- Sample is 9 distinct networks / 14 sessions — enough to close the checkpoint
+  criterion, not a population statistic. All one household, one phone, one
+  region (DE), summer. The 86–89% rate is directional, not a guarantee.
+- The relay samples (#14/#15) are a real away network but still Wi-Fi legs; a
+  cellular-to-relay worst case wasn't captured (cellular always went direct).
 - Real-media 1080p/subtitle/4K over the *away* path not yet driven end-to-end
   (only synthetic throughput + a LAN HLS seek from step 5).
 - POC code is throwaway (owner-confirmed): no auth/tenancy, hardcoded room `poc`,

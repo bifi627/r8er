@@ -58,15 +58,25 @@ curl -fsS -X POST "$BASE/Library/VirtualFolders?name=dev-media&collectionType=mo
 curl -fsS -X POST "$BASE/Library/Refresh" -H "X-Emby-Token: $TOKEN" >/dev/null || true
 
 echo "== 6/7 waiting for the scan to index the clips =="
-ITEM_ID=""
-for i in $(seq 1 40); do
-  ITEMS=$(curl -fsS "$BASE/Items?Recursive=true&IncludeItemTypes=Movie&userId=$USER_ID" \
+# Select by file Path, not Name: Jellyfin's online metadata matcher collapses
+# all three H.264 fixtures to one title, so Name is ambiguous. Wait until BOTH
+# the long clip and the 1080p clip (larger, scans later) are indexed. Fields=Path
+# also brings MediaStreams so we read the subtitle index without a second call.
+# Strict path matches only (no its[0] here — that raced the scan and aliased the
+# long clip to whatever indexed first). The 273 MB 1080p file scans LAST, so wait
+# on it; then fall back to its[0] for the long clip only after the loop.
+ITEM_ID=""; P1080_ID=""; SUB_IDX=""; FIRST_ID=""
+for i in $(seq 1 90); do
+  ITEMS=$(curl -fsS "$BASE/Items?Recursive=true&IncludeItemTypes=Movie&userId=$USER_ID&Fields=Path,MediaStreams" \
     -H "X-Emby-Token: $TOKEN")
-  # pick the long clip (10-min seek fixture) by name; fall back to first item
-  ITEM_ID=$(printf '%s' "$ITEMS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const its=(JSON.parse(s).Items||[]);const m=its.find(i=>/long/i.test(i.Name))||its[0];process.stdout.write(m?m.Id:"")})')
-  [ -n "$ITEM_ID" ] && break
+  eval "$(printf '%s' "$ITEMS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const its=(JSON.parse(s).Items||[]);const byPath=re=>its.find(i=>re.test(i.Path||""));const long=byPath(/h264-aac-long/i)||byPath(/long/i);const p=byPath(/1080p/i);const sub=p&&(p.MediaStreams||[]).find(x=>x.Type==="Subtitle");process.stdout.write(`ITEM_ID=${long?long.Id:""}\nP1080_ID=${p?p.Id:""}\nSUB_IDX=${sub?sub.Index:""}\nFIRST_ID=${its[0]?its[0].Id:""}\n`)})')"
+  # Done once the last-to-scan 1080p clip is in; also stop if there's simply no
+  # 1080p fixture on disk (long is in and the item count has settled).
+  [ -n "$P1080_ID" ] && break
+  [ -n "$ITEM_ID" ] && [ "$i" -ge 20 ] && break
   sleep 1
 done
+ITEM_ID="${ITEM_ID:-$FIRST_ID}"
 [ -n "$ITEM_ID" ] || { echo "scan produced no movie items"; exit 1; }
 
 echo "== 7/7 minting agent API key =="
@@ -77,8 +87,8 @@ API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "X-Emby-Token: $TOKEN" \
 
 # Persist for the harness / agent. Git-ignored: throwaway dev creds.
 OUT="dev/.jellyfin.json"
-node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({base:process.argv[2],user:process.argv[3],userId:process.argv[4],token:process.argv[5],apiKey:process.argv[6],longItemId:process.argv[7]},null,2)+"\n")' \
-  "$OUT" "$BASE" "$USER_NAME" "$USER_ID" "$TOKEN" "$API_KEY" "$ITEM_ID"
+node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({base:process.argv[2],user:process.argv[3],userId:process.argv[4],token:process.argv[5],apiKey:process.argv[6],longItemId:process.argv[7],p1080ItemId:process.argv[8]||null,subtitleIndex:process.argv[9]||null},null,2)+"\n")' \
+  "$OUT" "$BASE" "$USER_NAME" "$USER_ID" "$TOKEN" "$API_KEY" "$ITEM_ID" "$P1080_ID" "$SUB_IDX"
 
 echo
 echo "Jellyfin ready."
@@ -86,7 +96,13 @@ echo "  admin:      $USER_NAME / $USER_PW"
 echo "  user id:    $USER_ID"
 echo "  api key:    $API_KEY"
 echo "  long clip:  $ITEM_ID"
+echo "  1080p+subs: ${P1080_ID:-<none — run gen-test-media.sh then re-run>} (subtitle index: ${SUB_IDX:-none})"
 echo "  wrote:      $OUT"
 echo
 echo "HLS URL to play through the tunnel (origin-relative):"
 echo "  /Videos/$ITEM_ID/master.m3u8?mediaSourceId=$ITEM_ID&deviceId=r8er-poc&api_key=$API_KEY&videoCodec=h264&audioCodec=aac"
+if [ -n "$P1080_ID" ]; then
+  echo
+  echo "Phone play URL (1080p + subs over the away path) — open on the phone:"
+  echo "  https://r8er.up.railway.app/play.html#item=$P1080_ID&key=$API_KEY${SUB_IDX:+&subs=$SUB_IDX}"
+fi
