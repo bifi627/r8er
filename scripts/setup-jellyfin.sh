@@ -65,11 +65,11 @@ echo "== 6/7 waiting for the scan to index the clips =="
 # Strict path matches only (no its[0] here — that raced the scan and aliased the
 # long clip to whatever indexed first). The 273 MB 1080p file scans LAST, so wait
 # on it; then fall back to its[0] for the long clip only after the loop.
-ITEM_ID=""; P1080_ID=""; SUB_IDX=""; FIRST_ID=""
+ITEM_ID=""; P1080_ID=""; SUB_IDX=""; HEVC_ID=""; FIRST_ID=""
 for i in $(seq 1 90); do
   ITEMS=$(curl -fsS "$BASE/Items?Recursive=true&IncludeItemTypes=Movie&userId=$USER_ID&Fields=Path,MediaStreams" \
     -H "X-Emby-Token: $TOKEN")
-  eval "$(printf '%s' "$ITEMS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const its=(JSON.parse(s).Items||[]);const byPath=re=>its.find(i=>re.test(i.Path||""));const long=byPath(/h264-aac-long/i)||byPath(/long/i);const p=byPath(/1080p/i);const sub=p&&(p.MediaStreams||[]).find(x=>x.Type==="Subtitle");process.stdout.write(`ITEM_ID=${long?long.Id:""}\nP1080_ID=${p?p.Id:""}\nSUB_IDX=${sub?sub.Index:""}\nFIRST_ID=${its[0]?its[0].Id:""}\n`)})')"
+  eval "$(printf '%s' "$ITEMS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const its=(JSON.parse(s).Items||[]);const byPath=re=>its.find(i=>re.test(i.Path||""));const long=byPath(/h264-aac-long/i)||byPath(/long/i);const p=byPath(/1080p/i);const hevc=byPath(/hevc/i);const sub=p&&(p.MediaStreams||[]).find(x=>x.Type==="Subtitle");process.stdout.write(`ITEM_ID=${long?long.Id:""}\nP1080_ID=${p?p.Id:""}\nSUB_IDX=${sub?sub.Index:""}\nHEVC_ID=${hevc?hevc.Id:""}\nFIRST_ID=${its[0]?its[0].Id:""}\n`)})')"
   # Done once the last-to-scan 1080p clip is in; also stop if there's simply no
   # 1080p fixture on disk (long is in and the item count has settled).
   [ -n "$P1080_ID" ] && break
@@ -87,8 +87,8 @@ API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "X-Emby-Token: $TOKEN" \
 
 # Persist for the harness / agent. Git-ignored: throwaway dev creds.
 OUT="dev/.jellyfin.json"
-node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({base:process.argv[2],user:process.argv[3],userId:process.argv[4],token:process.argv[5],apiKey:process.argv[6],longItemId:process.argv[7],p1080ItemId:process.argv[8]||null,subtitleIndex:process.argv[9]||null},null,2)+"\n")' \
-  "$OUT" "$BASE" "$USER_NAME" "$USER_ID" "$TOKEN" "$API_KEY" "$ITEM_ID" "$P1080_ID" "$SUB_IDX"
+node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({base:process.argv[2],user:process.argv[3],userId:process.argv[4],token:process.argv[5],apiKey:process.argv[6],longItemId:process.argv[7],p1080ItemId:process.argv[8]||null,subtitleIndex:process.argv[9]||null,hevcItemId:process.argv[10]||null},null,2)+"\n")' \
+  "$OUT" "$BASE" "$USER_NAME" "$USER_ID" "$TOKEN" "$API_KEY" "$ITEM_ID" "$P1080_ID" "$SUB_IDX" "$HEVC_ID"
 
 echo
 echo "Jellyfin ready."
@@ -97,6 +97,7 @@ echo "  user id:    $USER_ID"
 echo "  api key:    $API_KEY"
 echo "  long clip:  $ITEM_ID"
 echo "  1080p+subs: ${P1080_ID:-<none — run gen-test-media.sh then re-run>} (subtitle index: ${SUB_IDX:-none})"
+echo "  hevc+ac3:   ${HEVC_ID:-<none — run gen-test-media.sh then re-run>} (forces transcode)"
 echo "  wrote:      $OUT"
 echo
 echo "HLS URL to play through the tunnel (origin-relative):"
@@ -105,4 +106,9 @@ if [ -n "$P1080_ID" ]; then
   echo
   echo "Phone play URL (1080p + subs over the away path) — open on the phone:"
   echo "  https://r8er.up.railway.app/play.html#item=$P1080_ID&key=$API_KEY${SUB_IDX:+&subs=$SUB_IDX}"
+fi
+if [ -n "$HEVC_ID" ]; then
+  echo
+  echo "Phone play URL (step 7a: HEVC->H.264 TRANSCODE @4Mbps over the away path):"
+  echo "  https://r8er.up.railway.app/play.html#item=$HEVC_ID&key=$API_KEY&vb=4000000"
 fi

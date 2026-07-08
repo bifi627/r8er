@@ -194,10 +194,15 @@ function startPlayback(pc) {
   if (!item || !key) { log("need item id + api key (run setup-jellyfin.sh)", "fail"); return; }
   if (!window.Hls || !Hls.isSupported()) { log("hls.js/MSE not supported in this browser", "fail"); return; }
 
+  // ponytail: #vb=<bits/s> hash param forces a transcode bitrate. Without it Jellyfin
+  // defaults HEVC transcodes to a tiny 416x234; the 7a transcode test passes vb=4000000
+  // for a realistic 720p re-encode. Remux (h264 source) ignores it — codec already matches.
+  const vb = hash.get("vb");
   const master = `${TUNNEL_ORIGIN}/Videos/${item}/master.m3u8` +
     `?mediaSourceId=${item}&deviceId=r8er-poc&api_key=${key}&videoCodec=h264&audioCodec=aac` +
+    (vb ? `&videoBitRate=${vb}&maxStreamingBitrate=${vb}` : "") +
     (subs ? `&SubtitleStreamIndex=${subs}&SubtitleMethod=Hls` : "");
-  log("loading HLS through the tunnel: /Videos/" + item + "/master.m3u8" + (subs ? ` (subs idx ${subs})` : " (no subs)"));
+  log("loading HLS through the tunnel: /Videos/" + item + "/master.m3u8" + (vb ? ` (transcode @${Math.round(vb/1e6)}Mbps)` : "") + (subs ? ` (subs idx ${subs})` : " (no subs)"));
 
   const v = $("v");
   const st = watchPlayback(v);

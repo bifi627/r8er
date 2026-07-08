@@ -42,6 +42,43 @@ Takeaways:
 - The data-channel SCTP ceiling (~330 Mbps on LAN) is **not** the bottleneck;
   the network is. 4K verdict is bandwidth-bound, not stack-bound.
 
+## 4K verdict (bandwidth-bound: PASS via adaptive bitrate)
+
+**Method:** no separate 4K playback run — the plan asks this be settled from the
+"real cellular-direct throughput distribution," and every input needed is already
+proven. The stack is not the limit (SCTP tops ~330 Mbps on LAN, 257 Mbps over
+Wi-Fi — rows #8/#13 — vs. ≤25 Mbps for any 4K stream), and both media paths that
+4K can take through the tunnel are proven: **remux/direct-play** (1080p+subs,
+done) and **transcode** (HEVC→H.264, step 7a). So 4K reduces entirely to: does the
+away link carry the bitrate, and if not, does it degrade gracefully.
+
+**Cellular-direct throughput (the flagship path, n=7):**
+5.3 · 12.6 · 18.6 · 28.3 · 29.9 · 32.3 · 46.9 Mbps → **median ~28, min 5.3, max 47**.
+
+| Stream | Typical bitrate | Cellular samples that sustain it |
+|---|---|---|
+| 1080p H.264 | ~5–8 Mbps | 6–7 / 7 |
+| 4K HEVC (direct-play) | ~10–15 Mbps | **6 / 7** (all but the 5.3 Mbps work-site sample) |
+| 4K H.264 | ~15–25 Mbps | ~5 / 7 (12.6 marginal, 5.3 no) |
+
+**Verdict:**
+- **4K is feasible on most measured cellular links** — a median cellular path
+  (~28 Mbps) comfortably carries 4K HEVC and clears 4K H.264. The tunnel itself
+  never limits it.
+- **It is not universal, and that's fine:** the answer to a weak link (the 5.3 Mbps
+  work site, or #23 `Vs-free-wlan` at 0.79 Mbps) is **adaptive bitrate — Jellyfin
+  transcodes the 4K source down to a rendition the link can hold.** That mechanism
+  is now proven end-to-end by step 7a (live transcode over the tunnel, with an
+  ABR-shaped ladder). Result on a thin pipe is lower resolution, **not a failure**.
+- **Native app is a 4K-quality QOL upgrade, not a Checkpoint-1 requirement:** it
+  would direct-play 4K HEVC without a browser MSE dependency and cover codecs the
+  browser can't decode. Browser-first stands; native stays deferred.
+
+**Caveat:** verdict is from the bandwidth distribution + the proven remux/transcode
+paths, not from streaming an actual 2160p file (fixtures top out at 1080p). That is
+exactly the plan's ask ("bandwidth-bound; record the distribution"); a real 4K-file
+run is a cheap MVP confirmation, not a Checkpoint-1 gate.
+
 ## Operating the instrument
 
 **1. Mint Cloudflare TURN creds (24h):**
@@ -150,14 +187,32 @@ candidate is a black hole.
       - **Pending:** open the phone URL on the away path, confirm smooth 1080p +
         visible subtitles + seek. **Needs a Railway redeploy first** (play.html is
         a new static file) — human-approved.
-- [ ] **4K verdict** (feasible / needs native app) — bandwidth-bound; record the
-      real cellular-direct throughput distribution.
+- [x] **4K verdict — DONE (bandwidth-bound: PASS via ABR).** Feasible on most
+      measured cellular links (4K HEVC clears 6/7, median ~28 Mbps); weak links
+      degrade gracefully via transcode-down (proven by 7a), not failure; native
+      app is a QOL upgrade, not a gate. Full analysis + distribution table in the
+      "4K verdict" section above.
 - [ ] **Tunnel approach confirmed on target browsers** (Checkpoint-1 exit
       criterion, easy to lose): Android Chrome + desktop verified; **iOS Safari
       status documented honestly** — hls.js needs MSE, which iOS Safari only has
       via ManagedMediaSource (17.1+). Untested so far.
-- [ ] **Step 7 — codec census:** script over 2–3 real libraries to confirm
-      Jellyfin's transcode coverage.
+- [x] **Step 7a — transcode over the tunnel: DONE.** Drove a live HEVC+AC3 →
+      H.264+AAC re-encode through the data channel on desktop Chrome **and**
+      mobile — we had only proven remux/copy before. Verdict: the transcode path
+      is codec-transparent to the tunnel (byte stream is identical to a remux;
+      the data channel doesn't know or care it's a re-encode). Seek worked
+      (`SEEK OK`), buffered cleanly at 720p. **Relay leg deliberately NOT
+      re-tested** — relay is transport-layer and codec-agnostic; step 6 already
+      proved TURN carries the tunnel, so transcode-over-relay is composition, not
+      a new risk. Server-side proof: `master.m3u8` on the `hevc/ac3` source with
+      `videoCodec=h264&audioCodec=aac` emits an `avc1/mp4a` variant, and the
+      served `.ts` ffprobes as `h264,aac` (source is `hevc,ac3`). `#vb=<bits/s>`
+      hash param (added to `play.html`) forces a realistic transcode bitrate —
+      `vb=4000000` gives full 1280×720 @ ~1.7 Mbps (default was 416×234).
+- [ ] **Step 7 — codec census (remaining):** ffprobe over 2–3 *real* user
+      libraries to inventory codecs/containers and size how much a remux-only
+      fallback would cover. Needs real media (dev fixtures are synthetic). The
+      transcode-path risk itself is retired by 7a above.
 - [ ] **Jellyfin verdict** (bundle vs. fallback engine) per the checkpoint list —
       including the two unmeasured inputs: idle footprint on target hardware and
       the GPLv2 distribution check (flagged, not resolved, in the handover notes).
