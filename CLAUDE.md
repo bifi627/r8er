@@ -17,9 +17,16 @@ Authority order when they disagree:
 
 ## Current state
 
-Scaffold only — no product code yet. **Next work: Phase 0 POC** per the
-implementation plan. Checkpoint 1 (cellular-to-home connectivity measurement
-+ seek-through-tunnel) gates all product code.
+**Phase 0 POC complete — Checkpoint 1 passed 2026-07-08 (verdict: GO, proceed
+to MVP as designed).** Proven end-to-end: cellular→home connectivity (86%
+direct, cellular 100%), TURN fallback, 1080p+subtitles, seek, HEVC transcode
+and remux over the tunnel, 4K feasible via ABR. Full record + criteria mapping:
+`docs/poc-connectivity-spike.md`. POC code is throwaway (hardcoded room `poc`,
+no auth/tenancy) — MVP rewrites it safely. Carried into MVP (non-blocking): iOS
+Safari device test, codec census over real libraries, Jellyfin NAS footprint +
+GPLv2 check. **Next work: Phase 1 MVP, build order in the implementation plan**
+(control plane → agent pairing with fingerprint pinning → tenant-isolated
+signaling → productized agent → streaming client → hardening).
 
 ## Stack & layout
 

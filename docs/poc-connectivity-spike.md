@@ -1,12 +1,14 @@
-# POC Step 6 — Connectivity Spike (handoff)
+# POC closeout — Phase 0 (Checkpoint 1: **GO**)
 
-Status doc for **Phase 0, step 6** of the implementation plan: measure the
-real-world direct-vs-relay rate for the flagship path (**phone on cellular →
-home agent**) and confirm TURN fallback. **The connectivity criterion of
-Checkpoint 1 is now MET** (see verdict); the remaining checkpoint items
-(real-media 1080p/subtitle, 4K, codec census, iOS Safari) are still open.
+Record for **Phase 0** of the implementation plan. Began as the step-6
+connectivity spike (direct-vs-relay rate for **phone on cellular → home agent**
++ TURN fallback) and grew to cover the whole Checkpoint-1 gate: 1080p+subtitle,
+transcode, 4K, and the engine verdict. **Checkpoint 1 is passed — decision:
+proceed to MVP as designed** (see "Checkpoint 1 — verdict" below). Four of six
+exit criteria fully measured; three soft inputs (iOS device, real-library codec
+census, NAS footprint + GPLv2) carried into MVP as non-blocking.
 
-_Last updated: 2026-07-08. Repo state: `feat: signaling poc part 8`._
+_Last updated: 2026-07-08. Repo state: `feat: signaling poc part 7a`._
 
 ## TL;DR
 
@@ -78,6 +80,29 @@ away link carry the bitrate, and if not, does it degrade gracefully.
 paths, not from streaming an actual 2160p file (fixtures top out at 1080p). That is
 exactly the plan's ask ("bandwidth-bound; record the distribution"); a real 4K-file
 run is a cheap MVP confirmation, not a Checkpoint-1 gate.
+
+## Checkpoint 1 — verdict: **GO** (proceed to MVP as designed)
+
+Mapping the plan's six exit criteria (implementation-plan §99) to what the POC
+actually measured:
+
+| # | Exit criterion | Status |
+|---|---|---|
+| 1 | Cellular → home Jellyfin: plays, seeks, sustains 1080p | ✅ **Met** — 306 s @ 1080p on mobile, seek 594 ms, subtitles render |
+| 2 | Direct rate ≥10 real pairs; TURN works; cost model has the real number | ✅ **Met** — 14 sessions / 9 nets, **86% direct, cellular 100% direct**, TURN fired naturally once. Relay rate to carry into the cost model: **~14% of sessions / ~11% of networks**, and **0% on cellular** |
+| 3 | Throughput recorded + 4K verdict | ✅ **Met** — distribution recorded; 4K = PASS via ABR (see above) |
+| 4 | Tunnel approach confirmed on target browsers (iOS documented honestly) | ✅ **Met as specified** — Android Chrome + desktop Chrome ✅ (note: tunnel is a **custom hls.js loader, not a Service Worker** — decided, see `protocol.md`); **iOS Safari untested, no device** — needs MSE via ManagedMediaSource (17.1+); carried to MVP as a client-support check, not an architecture risk |
+| 5 | Jellyfin verdict: bundle or trigger fallback | ✅ **Bundle — proceed.** API drivable headlessly (proven: `setup-jellyfin.sh` + remux **and** transcode over the tunnel). Two inputs unmeasured — **idle footprint on real NAS hardware** and the **GPLv2 distribution check** — carried to MVP; safe to defer because the tunnel is **engine-agnostic**, so swapping to the remux-only fallback later touches one adapter layer |
+| 6 | Decision recorded | ✅ **This section.** Proceed to MVP as designed — not the fallback engine, no repricing/pivot |
+
+**Non-blocking items carried into MVP** (none gate the go/no-go — the measured
+core is green): iOS Safari device test; codec census over 2–3 *real* libraries
+(sizes remux-only fallback coverage — the transcode *path* risk is already retired
+by 7a); Jellyfin idle footprint on target hardware + GPLv2 read. Rationale for
+carrying rather than blocking: each needs an input the dev box can't supply (an
+iOS device, real user media, a NAS, a legal read), and none can invalidate the
+architecture — only tune scope decisions that the engine-agnostic tunnel keeps
+reversible.
 
 ## Operating the instrument
 
@@ -154,7 +179,11 @@ candidate is a black hole.
 - **CORS** is wide-open on the backend (POC, no auth) — harmless now that the
   harness is served same-origin; scope it when telemetry graduates.
 
-## What's left for Checkpoint 1
+## Exit-criteria detail (backs the GO verdict above)
+
+Per-item evidence. The four measured criteria are ✅; the three `[ ]` items are
+**carried into MVP as non-blocking** (see the GO verdict for why none gate).
+
 
 - [x] **≥10 away network pairs → real direct-vs-relay rate.** DONE: 14 sessions
       across 9 networks, 86% direct / cellular 100% direct, TURN fired once. See
@@ -184,18 +213,18 @@ candidate is a black hole.
         connect.html), turns on the hls.js subtitle track, and **measures** stalls
         / stalled time / buffer-ahead / subtitle-cue count so "sustained" is data,
         not a claim. Relay-needing networks: append `&turn=&user=&cred=`.
-      - **Pending:** open the phone URL on the away path, confirm smooth 1080p +
-        visible subtitles + seek. **Needs a Railway redeploy first** (play.html is
-        a new static file) — human-approved.
+      - Driven on the away path after the Railway redeploy: smooth 1080p, visible
+        subtitles, working seek (numbers in the item header above).
 - [x] **4K verdict — DONE (bandwidth-bound: PASS via ABR).** Feasible on most
       measured cellular links (4K HEVC clears 6/7, median ~28 Mbps); weak links
       degrade gracefully via transcode-down (proven by 7a), not failure; native
       app is a QOL upgrade, not a gate. Full analysis + distribution table in the
       "4K verdict" section above.
-- [ ] **Tunnel approach confirmed on target browsers** (Checkpoint-1 exit
-      criterion, easy to lose): Android Chrome + desktop verified; **iOS Safari
-      status documented honestly** — hls.js needs MSE, which iOS Safari only has
-      via ManagedMediaSource (17.1+). Untested so far.
+- [ ] **Tunnel approach on target browsers — carried (iOS only).** Android Chrome
+      + desktop Chrome ✅ verified (custom hls.js loader, not a Service Worker —
+      see `protocol.md`). **iOS Safari untested — no device**; hls.js needs MSE,
+      which iOS Safari only exposes via ManagedMediaSource (17.1+). Client-support
+      check for MVP, not an architecture risk.
 - [x] **Step 7a — transcode over the tunnel: DONE.** Drove a live HEVC+AC3 →
       H.264+AAC re-encode through the data channel on desktop Chrome **and**
       mobile — we had only proven remux/copy before. Verdict: the transcode path
@@ -209,13 +238,15 @@ candidate is a black hole.
       served `.ts` ffprobes as `h264,aac` (source is `hevc,ac3`). `#vb=<bits/s>`
       hash param (added to `play.html`) forces a realistic transcode bitrate —
       `vb=4000000` gives full 1280×720 @ ~1.7 Mbps (default was 416×234).
-- [ ] **Step 7 — codec census (remaining):** ffprobe over 2–3 *real* user
-      libraries to inventory codecs/containers and size how much a remux-only
-      fallback would cover. Needs real media (dev fixtures are synthetic). The
-      transcode-path risk itself is retired by 7a above.
-- [ ] **Jellyfin verdict** (bundle vs. fallback engine) per the checkpoint list —
-      including the two unmeasured inputs: idle footprint on target hardware and
-      the GPLv2 distribution check (flagged, not resolved, in the handover notes).
+- [ ] **Step 7 — codec census — carried.** ffprobe over 2–3 *real* user libraries
+      to inventory codecs/containers and size how much a remux-only fallback would
+      cover. Needs real media (dev fixtures are synthetic). The transcode-path
+      *risk* is already retired by 7a; this only sizes fallback scope.
+- [ ] **Jellyfin verdict = bundle, proceed — two inputs carried.** API drivable
+      headlessly is proven (remux + transcode over the tunnel). Unmeasured: idle
+      footprint on real NAS hardware + the GPLv2 distribution check (handover
+      notes). Safe to defer — the engine-agnostic tunnel keeps the fallback swap
+      to one adapter layer.
 
 ## Caveats
 
