@@ -29,6 +29,10 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Task 2: Firebase ID-token verification (VerifyIdTokenAsync). Same call
+         path in dev (emulator) and prod (real issuer) — the only .NET option
+         honoring the no-auth-bypass rule. -->
+    <PackageReference Include="FirebaseAdmin" Version="3.1.0" />
   </ItemGroup>
 
 </Project>

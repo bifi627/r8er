@@ -16,6 +16,9 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <!-- Task 2: generic container builder for the Firebase Auth emulator
+         (node:22-alpine running firebase-tools). Matches Testcontainers.PostgreSql. -->
+    <PackageReference Include="Testcontainers" Version="4.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
