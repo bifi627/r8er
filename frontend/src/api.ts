@@ -11,5 +11,9 @@ async function authed<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export const getMe = () => authed<{ userId: string; email: string; tenantId: string }>('/me')
-export const getDevices = () => authed<{ id: string; name: string | null; lastSeenAt: string | null }[]>('/devices')
+export const getMe = () =>
+  authed<{ userId: string; email: string; tenantId: string }>('/me')
+export const getDevices = () =>
+  authed<{ id: string; name: string | null; lastSeenAt: string | null }[]>(
+    '/devices',
+  )

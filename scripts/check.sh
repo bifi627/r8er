@@ -4,16 +4,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "== backend: build + test =="
+echo "== backend: format + build + test =="
+dotnet format backend/R8er.slnx --verify-no-changes
 dotnet test backend/R8er.slnx --nologo
 
-echo "== frontend: lint + typecheck + build =="
+echo "== frontend: format + lint + typecheck + build =="
+npm run format:check --prefix frontend
 npm run lint --prefix frontend
 npm run build --prefix frontend
 
-echo "== agent: vet + build + test =="
+echo "== agent: fmt + vet + build + test =="
 if command -v go >/dev/null 2>&1; then
-  (cd agent && go vet ./... && go build ./... && go test ./...)
+  (cd agent && test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+   go vet ./... && go build ./... && go test ./...)
 else
   # ponytail: Go absent on the primary Windows machine; CI still runs it
   echo "!! SKIPPED: go not installed locally — agent is UNVERIFIED here, CI will run it" >&2
