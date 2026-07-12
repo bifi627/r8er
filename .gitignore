@@ -3,6 +3,10 @@ bin/
 obj/
 *.user
 
+# Reqnroll code-behind: generated next to .feature files at build time (pre-3.3
+# has no option to redirect into obj/); regenerates on every build, never commit.
+*.feature.cs
+
 # Node
 node_modules/
 dist/
