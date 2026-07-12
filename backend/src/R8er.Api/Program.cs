@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Claims;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
@@ -18,6 +19,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 // EF Core control-plane store. Key mirrors .env.example (ConnectionStrings__Default);
 // falls back to the local compose Postgres. (POC Telemetry.cs keeps its own raw
 // Npgsql connection — untouched here; it graduates in item 3.)
+builder.Configuration.AddUserSecrets<Program>();
 var connString = builder.Configuration.GetConnectionString("Default")
     ?? "Host=localhost;Port=5432;Database=r8er;Username=r8er;Password=dev";
 builder.Services.AddDbContext<R8erDbContext>(o => o.UseNpgsql(connString));
@@ -28,8 +30,7 @@ builder.Services.AddDbContext<R8erDbContext>(o => o.UseNpgsql(connString));
 var firebaseProjectId = builder.Configuration["FIREBASE_PROJECT_ID"] ?? "demo-r8er";
 if (FirebaseApp.DefaultInstance is null)
 {
-    var usingEmulator = !string.IsNullOrEmpty(
-        Environment.GetEnvironmentVariable("FIREBASE_AUTH_EMULATOR_HOST"));
+    var usingEmulator = !string.IsNullOrEmpty(builder.Configuration["FIREBASE_AUTH_EMULATOR_HOST"]);
     FirebaseApp.Create(new AppOptions
     {
         ProjectId = firebaseProjectId,
