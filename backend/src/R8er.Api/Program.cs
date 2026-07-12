@@ -33,15 +33,21 @@ var firebaseProjectId = builder.Configuration["FIREBASE_PROJECT_ID"] ?? "demo-r8
 if (FirebaseApp.DefaultInstance is null)
 {
     var usingEmulator = !string.IsNullOrEmpty(builder.Configuration["FIREBASE_AUTH_EMULATOR_HOST"]);
-    var serviceAccountJson = builder.Configuration["FIREBASE_SERVICE_ACCOUNT_JSON"];
+    // ponytail: read the env var directly, not via Configuration — a multi-line/JSON
+    // value plus provider ordering (UserSecrets appended at L22) can shadow it. Direct
+    // read is the source of truth for a container-injected secret.
+    var serviceAccountJson = (Environment.GetEnvironmentVariable("FIREBASE_SERVICE_ACCOUNT_JSON")
+        ?? builder.Configuration["FIREBASE_SERVICE_ACCOUNT_JSON"])?.Trim();
+    if (!usingEmulator && string.IsNullOrEmpty(serviceAccountJson))
+        throw new InvalidOperationException(
+            "FIREBASE_SERVICE_ACCOUNT_JSON is empty at runtime (and no emulator host set). " +
+            "The process cannot see the env var — check it's set on the running service, not just build.");
     FirebaseApp.Create(new AppOptions
     {
         ProjectId = firebaseProjectId,
         Credential = usingEmulator
             ? GoogleCredential.FromAccessToken("owner")     // dummy; emulator ignores it
-            : !string.IsNullOrEmpty(serviceAccountJson)
-                ? GoogleCredential.FromJson(serviceAccountJson)
-                : GoogleCredential.GetApplicationDefault(),
+            : GoogleCredential.FromJson(serviceAccountJson),
     });
 }
 
