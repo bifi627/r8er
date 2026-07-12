@@ -1,0 +1,30 @@
+# Shared formatting rules. `dotnet format` reads this for C#; Prettier reads it
+# for the frontend (overridden by frontend/.prettierrc.json where they differ).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Web + config files: 2-space (matches existing frontend code).
+[*.{js,jsx,ts,tsx,json,css,html,yml,yaml}]
+indent_size = 2
+
+# Go is tab-indented by gofmt; don't fight it.
+[*.go]
+indent_style = tab
+
+# Markdown: trailing whitespace can be a hard line break.
+[*.md]
+trim_trailing_whitespace = false
+
+# C# style — kept light to match existing code (file-scoped namespaces, usings
+# outside the namespace, System usings first). Broader rules can tighten later.
+[*.cs]
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+csharp_style_namespace_declarations = file_scoped:warning

@@ -10,7 +10,20 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
+    <!-- Pinned to 10.0.4 to match Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3's
+         EFCore.Relational dependency (avoids an MSB3277 conflict warning). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Reqnroll: BDD/Gherkin behavior tests (owner-chosen); the tenant-isolation
+         feature doubles as the Checkpoint-3 security-review artifact.
+         Reqnroll.xUnit pulls the MSBuild feature-file source generator. -->
+    <PackageReference Include="Reqnroll.xUnit" Version="2.4.0" />
+    <PackageReference Include="Reqnroll.Microsoft.Extensions.DependencyInjection" Version="2.4.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <!-- Task 2: generic container builder for the Firebase Auth emulator
+         (node:22-alpine running firebase-tools). Matches Testcontainers.PostgreSql. -->
+    <PackageReference Include="Testcontainers" Version="4.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>

@@ -28,6 +28,16 @@ GPLv2 check. **Next work: Phase 1 MVP, build order in the implementation plan**
 (control plane → agent pairing with fingerprint pinning → tenant-isolated
 signaling → productized agent → streaming client → hardening).
 
+**Phase 1 MVP — item 1 (control-plane foundation) complete.** Migration #1
+(tenants/users/devices), Firebase ID-token verification (FirebaseAdmin, same path
+dev+prod), first-sign-in tenant provisioning, and the ONE EF global query filter
+enforcing tenant isolation are in. Integration harness: Testcontainers Postgres +
+Firebase Auth emulator, real tokens minted through the prod verify path; behaviors
+covered by Reqnroll (isolation/provisioning/auth-reject) + xUnit edges. React:
+Firebase sign-in + empty authed shell. **Next: item 2, agent pairing with
+DTLS-fingerprint pinning** (the `devices.dtls_fingerprint` / `agent_credential_hash`
+columns are the reserved placeholders).
+
 ## Stack & layout
 
 | Dir | What | Stack |

@@ -1,0 +1,15 @@
+# Normalize line endings to LF for all text files. The formatters (dotnet format,
+# Prettier, gofmt) emit LF, so pinning LF keeps the format gate stable across
+# Windows and Linux/CI. Binary files are auto-detected and left untouched.
+* text=auto eol=lf
+
+# Belt-and-suspenders for common binaries.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff  binary
+*.woff2 binary
+*.mp4  binary
+*.mkv  binary

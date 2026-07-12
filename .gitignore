@@ -3,6 +3,10 @@ bin/
 obj/
 *.user
 
+# Reqnroll code-behind: generated next to .feature files at build time (pre-3.3
+# has no option to redirect into obj/); regenerates on every build, never commit.
+*.feature.cs
+
 # Node
 node_modules/
 dist/
@@ -19,6 +23,10 @@ dev-media/
 .vs/
 .idea/
 TestResults/
+
+# Firebase Auth emulator: persisted user export + debug log (local dev state)
+dev/firebase/data/
+dev/firebase/firebase-debug.log
 
 # dev-only Jellyfin creds from scripts/setup-jellyfin.sh (throwaway)
 dev/.jellyfin.json
