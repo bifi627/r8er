@@ -26,17 +26,22 @@ builder.Services.AddDbContext<R8erDbContext>(o => o.UseNpgsql(connString));
 
 // FirebaseAdmin init. Emulator (dev): FIREBASE_AUTH_EMULATOR_HOST is set and
 // VerifyIdTokenAsync skips the signature — same call as prod. A dummy credential
-// satisfies init in emulator mode; prod uses application-default credentials.
+// satisfies init in emulator mode. Prod needs a real service account: Railway has
+// no ambient ADC, so we read the JSON from FIREBASE_SERVICE_ACCOUNT_JSON and fall
+// back to GetApplicationDefault() only for GCP-hosted runs.
 var firebaseProjectId = builder.Configuration["FIREBASE_PROJECT_ID"] ?? "demo-r8er";
 if (FirebaseApp.DefaultInstance is null)
 {
     var usingEmulator = !string.IsNullOrEmpty(builder.Configuration["FIREBASE_AUTH_EMULATOR_HOST"]);
+    var serviceAccountJson = builder.Configuration["FIREBASE_SERVICE_ACCOUNT_JSON"];
     FirebaseApp.Create(new AppOptions
     {
         ProjectId = firebaseProjectId,
         Credential = usingEmulator
             ? GoogleCredential.FromAccessToken("owner")     // dummy; emulator ignores it
-            : GoogleCredential.GetApplicationDefault(),
+            : !string.IsNullOrEmpty(serviceAccountJson)
+                ? GoogleCredential.FromJson(serviceAccountJson)
+                : GoogleCredential.GetApplicationDefault(),
     });
 }
 
