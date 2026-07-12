@@ -48,6 +48,8 @@ namespace R8er.Api.Migrations
                     b.HasIndex("FirebaseUid")
                         .IsUnique();
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("users", (string)null);
                 });
 
@@ -79,6 +81,8 @@ namespace R8er.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("devices", (string)null);
                 });
 
@@ -99,6 +103,24 @@ namespace R8er.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.AppUser", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.Device", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -12,7 +12,7 @@ using R8er.Api.Data;
 namespace R8er.Api.Migrations
 {
     [DbContext(typeof(R8erDbContext))]
-    [Migration("20260712165454_InitialCreate")]
+    [Migration("20260712170533_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -51,6 +51,8 @@ namespace R8er.Api.Migrations
                     b.HasIndex("FirebaseUid")
                         .IsUnique();
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("users", (string)null);
                 });
 
@@ -82,6 +84,8 @@ namespace R8er.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId");
+
                     b.ToTable("devices", (string)null);
                 });
 
@@ -102,6 +106,24 @@ namespace R8er.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.AppUser", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.Device", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

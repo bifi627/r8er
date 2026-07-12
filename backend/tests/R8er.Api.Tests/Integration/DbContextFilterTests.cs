@@ -45,4 +45,28 @@ public class DbContextFilterTests : IAsyncLifetime
         Assert.Single(visible);
         Assert.Equal("a-box", visible[0].Name);
     }
+
+    [Fact]
+    public async Task Global_filter_returns_no_rows_when_CurrentTenantId_is_null()
+    {
+        Guid tenantA, tenantB;
+        await using (var seed = NewContext())
+        {
+            var a = new Tenant(); var b = new Tenant();
+            seed.Tenants.AddRange(a, b);
+            await seed.SaveChangesAsync();
+            tenantA = a.Id; tenantB = b.Id;
+            seed.Devices.Add(new Device { TenantId = tenantA, Name = "a-box" });
+            seed.Devices.Add(new Device { TenantId = tenantB, Name = "b-box" });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = NewContext();
+        db.CurrentTenantId = null;
+
+        // Pre-auth state: no tenant means no rows, ever — fails closed, not open.
+        var visible = await db.Devices.ToListAsync();
+
+        Assert.Empty(visible);
+    }
 }

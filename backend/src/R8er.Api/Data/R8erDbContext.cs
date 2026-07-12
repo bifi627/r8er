@@ -33,6 +33,11 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
         });
 
+        // DB-level FKs matching the design doc (tenant_id uuid NOT NULL REFERENCES
+        // tenants(id)). No navigation properties — entities stay plain scalars.
+        b.Entity<AppUser>().HasOne<Tenant>().WithMany().HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<Device>().HasOne<Tenant>().WithMany().HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Cascade);
+
         // ONE place: apply the tenant filter to every ITenantOwned entity. A
         // strongly-typed generic lambda referencing the instance property is the
         // documented EF multi-tenancy pattern (value read per query, not baked).
