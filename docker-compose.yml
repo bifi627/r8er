@@ -24,18 +24,19 @@ services:
       - ./dev-media:/media:ro
 
   firebase:
-    # Auth emulator only (Node-based, no Java needed).
-    image: node:22-alpine
+    # Auth emulator only (Node-based, no Java needed). Prebuilt image bakes a
+    # pinned firebase-tools so boot pulls nothing from npm (see dev/firebase/Dockerfile).
+    build: ./dev/firebase
     working_dir: /app
     stop_grace_period: 30s        # let firebase-tools export on SIGTERM before SIGKILL
     # Persist users across `compose down`: import only when a prior export exists
-    # (avoids first-run "no such dir"), always export on graceful exit. exec → npx
-    # is PID 1 so it receives SIGTERM directly and the export actually fires.
+    # (avoids first-run "no such dir"), always export on graceful exit. exec →
+    # firebase is PID 1 so it receives SIGTERM directly and the export actually fires.
     # $$ escapes compose interpolation so the literal $A reaches the shell.
     command: >-
       sh -c 'A="--export-on-exit=/app/data";
       [ -f /app/data/firebase-export-metadata.json ] && A="--import=/app/data $$A";
-      exec npx -y firebase-tools emulators:start --only auth --project demo-r8er $$A'
+      exec firebase emulators:start --only auth --project demo-r8er $$A'
     ports:
       - "9099:9099"
     volumes:

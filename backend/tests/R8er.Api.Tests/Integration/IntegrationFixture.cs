@@ -15,10 +15,8 @@ namespace R8er.Api.Tests.Integration;
 /// process-global `SharedContainers`. That keeps FIREBASE_AUTH_EMULATOR_HOST at one
 /// stable value for the whole run — a second emulator would fight the first over
 /// that process-global env var and real tokens minted from one would fail
-/// verification when it points at the other. Reused image + command from
-/// docker-compose.yml.
-/// ponytail: npx pulls firebase-tools at start; if CI startup is too slow, bake a
-/// node+firebase-tools Dockerfile and .WithImage(ImageFromDockerfile).
+/// verification when it points at the other. Reuses the prebuilt emulator image
+/// (dev/firebase/Dockerfile) so boot pulls nothing from npm — deterministic start.
 public sealed class IntegrationFixture : IAsyncLifetime
 {
     private static readonly Lazy<Task<SharedContainers>> Shared = new(SharedContainers.StartAsync);
@@ -52,13 +50,23 @@ public sealed class IntegrationFixture : IAsyncLifetime
 
         public static async Task<SharedContainers> StartAsync()
         {
+            // Prebuilt (dev/firebase/Dockerfile) so firebase-tools is baked into the
+            // image, not npx-pulled at container start — the npm fetch moves into the
+            // build step (Docker-layer cached) and boot becomes deterministic.
+            var firebaseImage = new ImageFromDockerfileBuilder()
+                .WithDockerfileDirectory(new CommonDirectoryPath(Path.Combine(RepoRoot.Find(), "dev", "firebase")), string.Empty)
+                .WithDockerfile("Dockerfile")
+                .WithName("r8er-firebase-emulator:15.23.0")
+                .Build();
+            await firebaseImage.CreateAsync();
+
             var pg = new PostgreSqlBuilder("postgres:17").Build();
-            var firebase = new ContainerBuilder("node:22-alpine")
+            var firebase = new ContainerBuilder(firebaseImage)
                 .WithResourceMapping(
                     new FileInfo(Path.Combine(RepoRoot.Find(), "dev", "firebase", "firebase.json")),
                     "/app/")
                 .WithWorkingDirectory("/app")
-                .WithCommand("npx", "-y", "firebase-tools", "emulators:start", "--only", "auth", "--project", "demo-r8er")
+                .WithCommand("firebase", "emulators:start", "--only", "auth", "--project", "demo-r8er")
                 .WithPortBinding(9099, true)
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("All emulators ready"))
                 .Build();
