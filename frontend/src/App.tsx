@@ -1,122 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, type User } from 'firebase/auth'
+import { auth } from './firebase'
+import { getMe, getDevices } from './api'
 
-function App() {
-  const [count, setCount] = useState(0)
+function SignIn() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+
+  async function go(kind: 'in' | 'up') {
+    setErr(null)
+    try {
+      const fn = kind === 'in' ? signInWithEmailAndPassword : createUserWithEmailAndPassword
+      await fn(auth, email, password)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    <main style={{ maxWidth: 320, margin: '4rem auto', display: 'grid', gap: 8 }}>
+      <h1>r8er</h1>
+      <input placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input placeholder="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" onClick={() => go('in')}>Sign in</button>
+        <button type="button" onClick={() => go('up')}>Create account</button>
+      </div>
+      {err && <p style={{ color: 'crimson' }}>{err}</p>}
+    </main>
   )
 }
 
-export default App
+function Shell({ user }: { user: User }) {
+  const [tenantId, setTenantId] = useState('')
+  const [devices, setDevices] = useState<{ id: string; name: string | null }[]>([])
+
+  useEffect(() => {
+    getMe().then((m) => setTenantId(m.tenantId)).catch(() => {})
+    getDevices().then(setDevices).catch(() => {})
+  }, [])
+
+  return (
+    <main style={{ maxWidth: 480, margin: '4rem auto' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span>{user.email}</span>
+        <button type="button" onClick={() => signOut(auth)}>Sign out</button>
+      </header>
+      <p style={{ color: '#888', fontSize: 12 }}>tenant {tenantId}</p>
+      <h2>Devices</h2>
+      {devices.length === 0 ? <p>No devices yet — pairing comes next.</p>
+        : <ul>{devices.map((d) => <li key={d.id}>{d.name ?? d.id}</li>)}</ul>}
+    </main>
+  )
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setReady(true) }), [])
+
+  if (!ready) return null
+  return user ? <Shell user={user} /> : <SignIn />
+}
