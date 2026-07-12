@@ -125,7 +125,8 @@ All engineering attention goes to the streaming path.
 
 **Build order within MVP:**
 
-1. **Control plane foundation (.NET 10 + Postgres + Firebase).**
+1. ✅ **Control plane foundation (.NET 10 + Postgres + Firebase).** *(done —
+   see `CLAUDE.md` Current state.)*
    Firebase ID-token verification middleware; tenants (tenant = household,
    one owner account for now); device registry. Plain EF Core CRUD, no
    cleverness. React app: Firebase sign-in, empty shell.
