@@ -20,8 +20,14 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 // falls back to the local compose Postgres. (POC Telemetry.cs keeps its own raw
 // Npgsql connection — untouched here; it graduates in item 3.)
 builder.Configuration.AddUserSecrets<Program>();
-var connString = builder.Configuration.GetConnectionString("Default")
+// Railway's Postgres hands out DATABASE_URL in URL form (postgres://u:p@host:port/db),
+// which Npgsql can't parse. Accept either a native key-value string OR a URL from any
+// of the usual keys, converting the URL case. ponytail: covers ConnectionStrings__Default
+// and Railway's DATABASE_URL with no hand-assembled connection string to get wrong.
+var rawConn = builder.Configuration.GetConnectionString("Default")
+    ?? builder.Configuration["DATABASE_URL"]
     ?? "Host=localhost;Port=5432;Database=r8er;Username=r8er;Password=dev";
+var connString = R8er.Api.ConnectionString.Normalize(rawConn);
 builder.Services.AddDbContext<R8erDbContext>(o => o.UseNpgsql(connString));
 
 // FirebaseAdmin init. Emulator (dev): FIREBASE_AUTH_EMULATOR_HOST is set and
