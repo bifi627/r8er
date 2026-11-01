@@ -12,5 +12,9 @@ const app = initializeApp({
 
 export const auth = getAuth(app)
 
-const emulator = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR
+// `vite dev` defaults to the local emulator so a bare `npm run dev` signs in;
+// prod builds never do. Set VITE_FIREBASE_AUTH_EMULATOR= (empty) to opt out in dev.
+const emulator =
+  import.meta.env.VITE_FIREBASE_AUTH_EMULATOR ??
+  (import.meta.env.DEV ? 'http://localhost:9099' : undefined)
 if (emulator) connectAuthEmulator(auth, emulator, { disableWarnings: true })

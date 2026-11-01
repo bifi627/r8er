@@ -146,8 +146,8 @@ candidate is a black hole.
   - `/signaling/{room}` — WebSocket SDP/ICE relay (2 peers, unchanged since step 2).
   - `POST/GET /telemetry/poc` — insert one session row / list rows + summary.
     `Telemetry.cs`: raw **Npgsql** (no EF), `CREATE TABLE IF NOT EXISTS
-    poc_connectivity`, conn string from `DATABASE_URL` (Railway) or
-    `ConnectionStrings:Postgres` (local). Schema init is **best-effort** — a DB
+    poc_connectivity`, same conn string as the EF control plane
+    (`ConnectionStrings:Default` / `DATABASE_URL`, resolved in `Program.cs`). Schema init is **best-effort** — a DB
     outage logs a warning and never takes signaling down.
   - `/connect.html` — the harness, served static from `wwwroot/` so a phone can
     load it same-origin (file:// is desktop-only).

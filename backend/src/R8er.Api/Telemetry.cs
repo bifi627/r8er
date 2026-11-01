@@ -16,36 +16,9 @@ public sealed class Telemetry
 
     private Telemetry(NpgsqlDataSource db) => _db = db;
 
-    /// Build from config. Accepts either a keyword connection string
-    /// (ConnectionStrings:Postgres) or a URL (DATABASE_URL, the form Railway's
-    /// Postgres plugin injects); falls back to the local compose Postgres.
-    public static Telemetry Create(IConfiguration cfg)
-    {
-        var conn =
-            ToKeywordString(Environment.GetEnvironmentVariable("DATABASE_URL"))
-            ?? cfg.GetConnectionString("Postgres")
-            ?? "Host=localhost;Port=5432;Username=r8er;Password=dev;Database=r8er";
-        return new Telemetry(NpgsqlDataSource.Create(conn));
-    }
-
-    // Railway/Heroku-style "postgresql://user:pass@host:port/db" -> Npgsql keywords.
-    private static string? ToKeywordString(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return null;
-        if (!url.StartsWith("postgres", StringComparison.OrdinalIgnoreCase)) return url;
-        var u = new Uri(url);
-        var creds = u.UserInfo.Split(':', 2);
-        var b = new NpgsqlConnectionStringBuilder
-        {
-            Host = u.Host,
-            Port = u.Port > 0 ? u.Port : 5432,
-            Username = Uri.UnescapeDataString(creds[0]),
-            Password = creds.Length > 1 ? Uri.UnescapeDataString(creds[1]) : "",
-            Database = u.AbsolutePath.TrimStart('/'),
-            SslMode = SslMode.Prefer, // Railway Postgres wants TLS; local ignores it
-        };
-        return b.ConnectionString;
-    }
+    /// Shares the control plane's resolved connection string (Program.cs), so
+    /// telemetry and EF always hit the same database.
+    public static Telemetry Create(string connString) => new(NpgsqlDataSource.Create(connString));
 
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
