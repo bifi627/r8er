@@ -60,7 +60,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
                 .Build();
             await firebaseImage.CreateAsync();
 
-            var pg = new PostgreSqlBuilder("postgres:17").Build();
+            var pg = new PostgreSqlBuilder("postgres:18").Build();
             var firebase = new ContainerBuilder(firebaseImage)
                 .WithResourceMapping(
                     new FileInfo(Path.Combine(RepoRoot.Find(), "dev", "firebase", "firebase.json")),

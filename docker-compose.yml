@@ -3,7 +3,7 @@
 #        docker compose --profile relay up -d   (adds local TURN)
 services:
   postgres:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: r8er
       POSTGRES_PASSWORD: dev
@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
 
   jellyfin:
     # Pinned deliberately — never `latest`. Update the pin consciously.
