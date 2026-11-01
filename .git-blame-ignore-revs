@@ -1,5 +1,0 @@
-# Mechanical reformat commits, skipped by GitHub blame automatically.
-# Local: git config blame.ignoreRevsFile .git-blame-ignore-revs
-
-# style(backend): braces, one statement per line, block-bodied methods
-b6f12873e644694a0d6a5ff92db0d9f4ce84fe77
