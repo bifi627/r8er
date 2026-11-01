@@ -48,12 +48,13 @@ if (FirebaseApp.DefaultInstance is null)
         throw new InvalidOperationException(
             "FIREBASE_SERVICE_ACCOUNT_JSON is empty at runtime (and no emulator host set). " +
             "The process cannot see the env var — check it's set on the running service, not just build.");
+    // Typed parse rejects non-service-account JSON (why GoogleCredential.FromJson was deprecated).
     FirebaseApp.Create(new AppOptions
     {
         ProjectId = firebaseProjectId,
         Credential = usingEmulator
             ? GoogleCredential.FromAccessToken("owner")     // dummy; emulator ignores it
-            : GoogleCredential.FromJson(serviceAccountJson),
+            : CredentialFactory.FromJson<ServiceAccountCredential>(serviceAccountJson).ToGoogleCredential(),
     });
 }
 

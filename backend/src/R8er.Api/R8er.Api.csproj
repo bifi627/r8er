@@ -20,11 +20,13 @@
          tenant query filter). Npgsql bumped 9.0.3 -> 10.0.3 alongside it: the
          EF Postgres provider requires Npgsql >= 10.0.3 (NU1605 downgrade
          error otherwise); the POC telemetry code is source-compatible.
-         EntityFrameworkCore/.Design pinned to 10.0.4, not the newer 10.0.9:
-         Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (latest stable) still
-         depends on EFCore.Relational 10.0.4, so matching avoids an
-         MSB3277 version-conflict warning. -->
+         EFCore.Relational is referenced explicitly so it flows to the test
+         project at the EF lockstep version: Npgsql.EntityFrameworkCore.PostgreSQL
+         10.0.3 only floors it at 10.0.4, and .Design (PrivateAssets) hides its
+         10.0.x from referencing projects -> MSB3277 conflict otherwise.
+         Bump all Microsoft.EntityFrameworkCore* together. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
