@@ -21,6 +21,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
 {
     private static readonly Lazy<Task<SharedContainers>> Shared = new(SharedContainers.StartAsync);
 
+    // ! assigned in InitializeAsync, which xUnit runs before any test
     private SharedContainers _shared = default!;
 
     public R8erApiFactory Factory => _shared.Factory;

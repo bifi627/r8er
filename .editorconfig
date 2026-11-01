@@ -28,3 +28,11 @@ trim_trailing_whitespace = false
 dotnet_sort_system_directives_first = true
 csharp_using_directive_placement = outside_namespace:warning
 csharp_style_namespace_declarations = file_scoped:warning
+
+# Null-forgiving `!` (Nullable.Extended.Analyzer, backend/Directory.Build.props):
+# fix the nullability instead; if `!` is truly needed, justify it with a
+# `// ! <why>` comment on the line above. Errors so they fail the build.
+dotnet_diagnostic.NX0001.severity = error
+dotnet_diagnostic.NX0002.severity = error
+dotnet_diagnostic.NX0003.severity = error
+dotnet_diagnostic.NX0004.severity = error

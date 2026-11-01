@@ -16,7 +16,7 @@ public static class CreateEnrollmentToken
             var expiresAt = DateTimeOffset.UtcNow + Lifetime;
             db.EnrollmentTokens.Add(new EnrollmentToken
             {
-                TenantId = Guid.Parse(user.FindFirstValue("tenant_id")!),
+                TenantId = Guid.Parse(user.FindFirstValue("tenant_id") ?? throw new InvalidOperationException("authenticated principal without tenant_id")),
                 TokenHash = Secrets.Hash(token),
                 ExpiresAt = expiresAt,
             });

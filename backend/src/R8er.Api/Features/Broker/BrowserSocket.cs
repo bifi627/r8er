@@ -46,7 +46,7 @@ public static class BrowserSocket
                                 && await db.Devices.AnyAsync(d => d.Id == deviceId, ct)
                                 && Broker.Agents.TryGetValue(deviceId, out agent)
                                 && agent.TenantId == user.TenantId;
-                            if (!ok)
+                            if (!ok || agent is null)
                             {
                                 agent = null;
                                 await me.SendAsync(new JsonObject { ["type"] = "error", ["error"] = "agent offline or unknown" }, ct);
@@ -54,7 +54,7 @@ public static class BrowserSocket
                             }
                             session = Guid.NewGuid();
                             Broker.Sessions[session] = new Broker.Link(socket, user.TenantId, deviceId);
-                            await agent!.SendAsync(new JsonObject
+                            await agent.SendAsync(new JsonObject
                             {
                                 ["type"] = "offer",
                                 ["session"] = session.ToString(),

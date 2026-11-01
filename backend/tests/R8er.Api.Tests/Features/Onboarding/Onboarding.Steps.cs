@@ -39,8 +39,10 @@ public class OnboardingSteps(IntegrationFixture fx)
         var res = await client.PostAsync("/agents/enrollment-tokens", null);
         res.EnsureSuccessStatusCode();
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Contains(body.GetProperty("token").GetString()!, body.GetProperty("installCommand").GetString());
-        return body.GetProperty("token").GetString()!;
+        var token = body.GetProperty("token").GetString();
+        Assert.NotNull(token);
+        Assert.Contains(token, body.GetProperty("installCommand").GetString());
+        return token;
     }
 
     private async Task<HttpResponseMessage> Enroll(string token, string name = "box")
@@ -73,7 +75,9 @@ public class OnboardingSteps(IntegrationFixture fx)
         var res = await Enroll(await CreateToken(email), name);
         res.EnsureSuccessStatusCode();
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
-        _credentials[name] = body.GetProperty("credential").GetString()!;
+        var credential = body.GetProperty("credential").GetString();
+        Assert.NotNull(credential);
+        _credentials[name] = credential;
     }
 
     [When("an agent enrolls with that token")]

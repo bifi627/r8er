@@ -10,7 +10,7 @@ public class Tenant
 public class AppUser
 {
     public Guid Id { get; set; }                    // our PK — never the Firebase UID
-    public string FirebaseUid { get; set; } = default!;
+    public required string FirebaseUid { get; set; }
     public string? Email { get; set; }
     public Guid TenantId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
@@ -34,7 +34,7 @@ public class EnrollmentToken : ITenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
-    public string TokenHash { get; set; } = default!;
+    public required string TokenHash { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? UsedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

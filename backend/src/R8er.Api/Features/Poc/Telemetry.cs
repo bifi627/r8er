@@ -71,6 +71,7 @@ public sealed class Telemetry
             NpgsqlDbType = NpgsqlDbType.Jsonb,
             Value = row.RawStats is { } r ? r.GetRawText() : (object)DBNull.Value,
         });
+        // ! INSERT … RETURNING id always yields one row
         return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 

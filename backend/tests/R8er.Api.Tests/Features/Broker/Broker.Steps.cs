@@ -15,6 +15,7 @@ public class BrokerSteps(IntegrationFixture fx)
     const string Fp = "sha-256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89";
 
     private readonly Dictionary<string, (Guid Id, WebSocket Ws)> _agents = new();
+    // ! assigned by the browser-connect step before any step uses it
     private WebSocket _browser = null!;
     private string _session = "";
 
@@ -57,10 +58,12 @@ public class BrokerSteps(IntegrationFixture fx)
     [StepDefinition("agent \"(.*)\" receives the offer")]
     public async Task ThenAgentGetsOffer(string name)
     {
-        var m = (await Receive(_agents[name].Ws))!.Value;
+        var m = Assert.NotNull(await Receive(_agents[name].Ws));
         Assert.Equal("offer", m.GetProperty("type").GetString());
         Assert.Equal("v=0 fake", m.GetProperty("sdp").GetProperty("sdp").GetString());
-        _session = m.GetProperty("session").GetString()!;
+        var session = m.GetProperty("session").GetString();
+        Assert.NotNull(session);
+        _session = session;
     }
 
     [When("agent \"(.*)\" answers that session")]
@@ -69,7 +72,7 @@ public class BrokerSteps(IntegrationFixture fx)
 
     [Then("the browser receives the answer")]
     public async Task ThenBrowserGetsAnswer() =>
-        Assert.Equal("v=0 answer", (await Receive(_browser))!.Value.GetProperty("sdp").GetProperty("sdp").GetString());
+        Assert.Equal("v=0 answer", Assert.NotNull(await Receive(_browser)).GetProperty("sdp").GetProperty("sdp").GetString());
 
     [Then("the browser receives nothing")]
     public async Task ThenBrowserNothing() => Assert.Null(await Receive(_browser, quiet: true));
@@ -79,7 +82,7 @@ public class BrokerSteps(IntegrationFixture fx)
 
     [Then("the browser is told the agent is offline or unknown")]
     public async Task ThenBrowserError() =>
-        Assert.Equal("error", (await Receive(_browser))!.Value.GetProperty("type").GetString());
+        Assert.Equal("error", Assert.NotNull(await Receive(_browser)).GetProperty("type").GetString());
 
     [When("a browser authenticates with token \"(.*)\"")]
     public Task WhenBadToken(string token) => BrowserAuth(token);

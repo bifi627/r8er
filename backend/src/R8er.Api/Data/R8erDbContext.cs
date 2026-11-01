@@ -54,6 +54,7 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
         foreach (var et in b.Model.GetEntityTypes()
                      .Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
         {
+            // ! nameof() guarantees the method exists on this class
             typeof(R8erDbContext)
                 .GetMethod(nameof(ApplyTenantFilter),
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
