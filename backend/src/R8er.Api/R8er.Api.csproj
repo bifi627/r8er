@@ -24,8 +24,8 @@
          Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 (latest stable) still
          depends on EFCore.Relational 10.0.4, so matching avoids an
          MSB3277 version-conflict warning. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -33,7 +33,7 @@
     <!-- Task 2: Firebase ID-token verification (VerifyIdTokenAsync). Same call
          path in dev (emulator) and prod (real issuer) — the only .NET option
          honoring the no-auth-bypass rule. -->
-    <PackageReference Include="FirebaseAdmin" Version="3.1.0" />
+    <PackageReference Include="FirebaseAdmin" Version="3.7.0" />
   </ItemGroup>
 
 </Project>
