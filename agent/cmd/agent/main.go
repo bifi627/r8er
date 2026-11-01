@@ -57,6 +57,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("agent: %v", err)
 		}
+		log.Printf("agent: device %s (%s)", st.DeviceID, st.Name)
 		port := env("R8ER_PAGE_PORT", "8097") // Jellyfin owns 8096
 		lan := onboarding.LANURL(port)
 		lanHost := ""

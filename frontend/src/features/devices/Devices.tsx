@@ -41,11 +41,13 @@ export function Devices() {
       {devices.length === 0 ? (
         <p>No agents yet.</p>
       ) : (
-        <ul>
+        <ul style={{ listStyle: 'none', padding: 0 }}>
           {devices.map((d) => (
             <li key={d.id}>
               <span style={{ color: d.online ? 'green' : '#888' }}>●</span>{' '}
-              {d.name ?? d.id} — {d.online ? 'online' : 'offline'}
+              {d.name ?? 'agent'}{' '}
+              <code style={{ fontSize: '0.8em', color: '#888' }}>{d.id}</code> —{' '}
+              {d.online ? 'online' : 'offline'}
               {d.online && d.lanUrl && (
                 <>
                   {' · '}
