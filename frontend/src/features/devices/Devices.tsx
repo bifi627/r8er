@@ -5,6 +5,7 @@ import {
   type Device,
   type Install,
 } from './api'
+import { Pairing } from '../pairing/Pairing'
 
 // Devices list + "Add agent" (onboarding flow 1). Polls so a freshly installed
 // agent shows up, and online/offline stays current. ponytail: 5s poll, push
@@ -56,6 +57,7 @@ export function Devices() {
                   </a>
                 </>
               )}
+              {d.online && <Pairing deviceId={d.id} lanUrl={d.lanUrl} />}
             </li>
           ))}
         </ul>

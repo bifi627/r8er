@@ -68,9 +68,11 @@ func LoadOrEnroll(ctx context.Context, dir, server, token, fp string) (*State, e
 	return &st, nil
 }
 
-// RunControl holds the authenticated control socket and heartbeats until it
-// drops. PR A: outbound heartbeats only; PR B adds signaling on this socket.
-func RunControl(ctx context.Context, server string, st *State, lanURL string, online *atomic.Bool) error {
+// RunControl holds the authenticated control socket until it drops: heartbeats
+// out, broker messages (signaling for browser sessions) in, handed to handle
+// with a send func that writes JSON back on this socket.
+func RunControl(ctx context.Context, server string, st *State, lanURL string, online *atomic.Bool,
+	handle func(raw []byte, send func(any))) error {
 	conn, _, err := websocket.Dial(ctx, server+"/agents/ws", &websocket.DialOptions{
 		HTTPHeader: http.Header{"Authorization": {"Bearer " + st.Credential}},
 	})
@@ -79,21 +81,35 @@ func RunControl(ctx context.Context, server string, st *State, lanURL string, on
 	}
 	defer conn.CloseNow()
 	defer online.Store(false)
-	ctx = conn.CloseRead(ctx) // nothing inbound yet; this still handles pings/close
+	conn.SetReadLimit(1 << 20) // SDP exceeds the 32KB default
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	hb, _ := json.Marshal(map[string]string{"type": "heartbeat", "lanUrl": lanURL})
-	t := time.NewTicker(heartbeatEvery)
-	defer t.Stop()
+	send := func(v any) {
+		b, _ := json.Marshal(v)
+		if err := conn.Write(ctx, websocket.MessageText, b); err != nil {
+			log.Printf("agent: control write: %v", err)
+		}
+	}
+	go func() { // heartbeat (also keeps Railway's edge from reaping an idle socket)
+		t := time.NewTicker(heartbeatEvery)
+		defer t.Stop()
+		for {
+			send(map[string]string{"type": "heartbeat", "lanUrl": lanURL})
+			online.Store(true)
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 	for {
-		if err := conn.Write(ctx, websocket.MessageText, hb); err != nil {
-			return fmt.Errorf("control: %w", err)
+		_, raw, err := conn.Read(ctx)
+		if err != nil {
+			return fmt.Errorf("control closed: %w", err)
 		}
-		online.Store(true)
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("control closed: %w", ctx.Err())
-		case <-t.C:
-		}
+		handle(raw, send)
 	}
 }
 

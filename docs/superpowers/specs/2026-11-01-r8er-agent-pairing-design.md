@@ -104,7 +104,8 @@ Non-goals (out of scope here):
 - Server-side device revocation, signaling rate limits, short-lived TURN creds
   (item 6). *In:* removing a paired browser from the agent page's list.
 - Auto-update, Compose packaging, published agent image (item 4).
-- Certificate rotation — rotation = re-onboard / re-pair, by design.
+- Certificate rotation — rotation = re-onboard / re-pair for now; automatic
+  rollover over the pinned channel is planned for item 4 (TECH_DEBT T12).
 - Fixing the served-JavaScript limit (below) — documented only.
 
 Anti-goals (failure even if it "works"):

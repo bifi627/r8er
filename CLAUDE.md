@@ -40,13 +40,16 @@ Firebase Auth emulator, real tokens minted through the prod verify path; behavio
 covered by Reqnroll (isolation/provisioning/auth-reject) + xUnit edges. React:
 Firebase sign-in + empty authed shell.
 
-**Items 2+3 designed** in `docs/superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`
-(supersedes the plan's QR/claim-code sketch), delivered as two PRs. **PR A (onboarding)
-built on `feat/agent-pairing`:** migration #2 (`enrollment_tokens`, `devices.lan_url`),
-enrollment token → `/agents/enroll` → credential, authenticated `/agents/ws` heartbeat,
-persistent 10-year agent DTLS cert + state dir, local agent page (Host/Origin guard),
-Devices list with online/offline + Add agent. **Next: PR B** — tenant-scoped broker,
-browser device key, commit/reveal comparison code, mutual pin enforcement.
+**Items 2+3** (design: `docs/superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`,
+supersedes the plan's QR/claim-code sketch), both on `feat/agent-pairing`. **PR A
+(onboarding):** migration #2, enrollment token → `/agents/enroll` → credential,
+authenticated `/agents/ws` heartbeat, persistent 10-year agent DTLS cert + state dir,
+local agent page (Host/Origin guard), Devices list. **PR B (broker + pairing):**
+tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto device key,
+session-bound connection auth, commit/reveal comparison code approved on the agent
+page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
+**Next: item 4** (productized agent). Naming rename agent→server / device→client
+is queued as TECH_DEBT T9.
 
 ## Stack & layout
 
@@ -68,7 +71,7 @@ browser device key, commit/reveal comparison code, mutual pin enforcement.
   token minter; `Data/` = shared-kernel tests.
 - Agent: package per feature in `agent/internal/<slice>/` with colocated `_test.go`;
   `cmd/agent/main.go` is wiring only. Slices don't import each other except shared
-  primitives (`identity`, `tunnel`).
+  primitives (`identity`, `tunnel`, `pairing`).
 
 Auth = Firebase (emulator in dev). Media engine = bundled Jellyfin (pinned
 image). Hosting = Railway. TURN = Cloudflare (local coturn in dev).

@@ -1,6 +1,6 @@
 import { auth } from './firebase'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5028'
+export const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5028'
 
 export async function authed<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await auth.currentUser?.getIdToken()

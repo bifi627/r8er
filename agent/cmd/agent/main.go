@@ -3,7 +3,9 @@
 //
 //	identity    persistent DTLS certificate + fingerprint (browsers pin it)
 //	onboarding  enrollment token → credential, control socket + heartbeat
-//	localpage   the agent's page on the home LAN
+//	pairing     device-key auth, comparison code, allowlist + pending approvals
+//	sessions    brokered browser sessions: auth channel, gated tunnel
+//	localpage   the agent's page on the home LAN (approve / remove browsers)
 //	tunnel      HTTP over data channels (the streaming primitive)
 //	poc         Phase-0 room signaling session (deleted by item 5)
 //
@@ -25,7 +27,9 @@ import (
 	"r8er/agent/internal/identity"
 	"r8er/agent/internal/localpage"
 	"r8er/agent/internal/onboarding"
+	"r8er/agent/internal/pairing"
 	"r8er/agent/internal/poc"
+	"r8er/agent/internal/sessions"
 )
 
 func main() {
@@ -64,14 +68,19 @@ func main() {
 		if u, err := url.Parse(lan); err == nil {
 			lanHost = u.Hostname()
 		}
+		store, err := pairing.Open(stateDir)
+		if err != nil {
+			log.Fatalf("agent: allowlist: %v", err)
+		}
+		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Client: client, Origin: origin}
 		var online atomic.Bool
 		go func() {
 			log.Printf("agent: local page on %s", lan)
-			page := localpage.Handler(st.Name, st.DeviceID, fp, &online)
+			page := localpage.Handler(st.Name, st.DeviceID, fp, &online, store)
 			log.Fatal(http.ListenAndServe(":"+port, localpage.Guard(lanHost, page)))
 		}()
 		go forever(ctx, func(ctx context.Context) error {
-			return onboarding.RunControl(ctx, server, st, lan, &online)
+			return onboarding.RunControl(ctx, server, st, lan, &online, sess.Handle)
 		})
 	}
 

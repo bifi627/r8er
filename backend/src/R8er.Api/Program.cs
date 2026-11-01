@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using R8er.Api;
 using R8er.Api.Auth;
 using R8er.Api.Data;
+using R8er.Api.Features.Broker;
 using R8er.Api.Features.Devices;
 using R8er.Api.Features.Me;
 using R8er.Api.Features.Onboarding;
@@ -95,6 +96,7 @@ ListDevices.Map(app);
 CreateEnrollmentToken.Map(app);
 Enroll.Map(app);
 AgentSocket.Map(app);
+BrowserSocket.Map(app);
 
 app.Run();
 

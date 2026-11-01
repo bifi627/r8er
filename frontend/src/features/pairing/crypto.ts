@@ -1,0 +1,48 @@
+// Pure pairing crypto, mirrored by agent/internal/pairing (docs/protocol.md,
+// "Pairing"). No imports, so node --test runs it against the shared vectors.
+
+const enc = new TextEncoder()
+
+export const hex = (b: ArrayBuffer | Uint8Array) =>
+  [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+
+export const b64 = (b: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(b)))
+
+export const sha256 = (s: string | ArrayBuffer) =>
+  crypto.subtle.digest('SHA-256', typeof s === 'string' ? enc.encode(s) : s)
+
+/** Contract form `sha-256 AA:BB:…` over raw bytes (e.g. SPKI). */
+export async function fingerprint(bytes: ArrayBuffer) {
+  return (
+    'sha-256 ' +
+    hex(await sha256(bytes))
+      .toUpperCase()
+      .match(/../g)!
+      .join(':')
+  )
+}
+
+/** The `a=fingerprint:sha-256 …` of an SDP, normalized to the contract form. */
+export function sdpFingerprint(sdp: string) {
+  const m = /a=fingerprint:sha-256 ([0-9A-Fa-f:]+)/.exec(sdp)
+  if (!m) throw new Error('SDP without a sha-256 fingerprint')
+  return 'sha-256 ' + m[1].toUpperCase()
+}
+
+/** What the device key signs: bound to both DTLS fingerprints of this session. */
+export const authMessage = (agentFp: string, browserFp: string, n: string) =>
+  enc.encode(`r8er-auth-v1|${agentFp}|${browserFp}|${n}`)
+
+/** 6-digit comparison code over the committed nonces. */
+export async function comparisonCode(
+  agentFp: string,
+  keyFp: string,
+  nA: string,
+  nB: string,
+) {
+  const h = await sha256(`${agentFp}|${keyFp}|${nA}|${nB}`)
+  return String(new DataView(h).getUint32(0) % 1_000_000).padStart(6, '0')
+}
+
+export const nonce = () => hex(crypto.getRandomValues(new Uint8Array(32)))

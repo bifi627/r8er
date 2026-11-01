@@ -8,9 +8,10 @@ echo "== backend: format + build + test =="
 dotnet format backend/R8er.slnx --verify-no-changes
 dotnet test backend/R8er.slnx --nologo
 
-echo "== frontend: format + lint + typecheck + build =="
+echo "== frontend: format + lint + test + typecheck + build =="
 npm run format:check --prefix frontend
 npm run lint --prefix frontend
+npm test --prefix frontend
 npm run build --prefix frontend
 
 echo "== agent: fmt + vet + build + test =="
