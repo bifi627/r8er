@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege for every job: checkout only. upload-artifact uses the runtime
+# token, not GITHUB_TOKEN. Widen per job, never here.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -46,3 +51,39 @@ jobs:
         working-directory: agent
       - run: go vet ./... && go build ./... && go test ./...
         working-directory: agent
+
+  # The one golden path (dev-env spec). Containers via testcontainers-node,
+  # backend/Vite/agent as real processes — see e2e/global-setup.ts.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: e2e
+      - run: npx playwright install --with-deps chrome
+        working-directory: e2e
+      - run: npx playwright test
+        working-directory: e2e
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-logs
+          path: |
+            e2e/logs/
+            e2e/test-results/
+            e2e/playwright-report/

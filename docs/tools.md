@@ -18,6 +18,7 @@ Version pins live in `docker-compose.yml`; bump them with the `deps-bump` skill.
 | **Railway** | PaaS hosting | Runs the backend (API + signaling WS) and Postgres. | — | yes |
 | **ffmpeg** | Video toolkit | `scripts/gen-test-media.sh` generates the codec test fixtures. | dev machine | — |
 | **Docker / Testcontainers** | Containers + test-driven container lifecycle | Runs compose deps; integration tests use real Postgres / Firebase emulator / Jellyfin instead of mocks. | yes | CI |
+| **Playwright** + Google Chrome | Browser automation | The one E2E golden path (`e2e/`): real browser → broker → agent → Jellyfin. Branded Chrome, not bundled Chromium — item 5's `<video>` needs H.264/AAC. Stack comes up via testcontainers-node (random ports). | `npm test --prefix e2e` | CI `e2e` job |
 | **GitHub Actions** | CI | Runs `scripts/check.sh`-equivalent jobs. Uses no repo secrets today. | — | CI |
 | *Cloudflare R2* | Object storage | **Deferred (QOL)**: cloud files, picked over GCS for zero egress. Not wired yet. | — | — |
 
