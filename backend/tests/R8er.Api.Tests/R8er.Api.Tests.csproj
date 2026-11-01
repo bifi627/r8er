@@ -20,8 +20,8 @@
     <!-- Reqnroll: BDD/Gherkin behavior tests (owner-chosen); the tenant-isolation
          feature doubles as the Checkpoint-3 security-review artifact.
          Reqnroll.xUnit pulls the MSBuild feature-file source generator. -->
-    <PackageReference Include="Reqnroll.xUnit" Version="2.4.0" />
-    <PackageReference Include="Reqnroll.Microsoft.Extensions.DependencyInjection" Version="2.4.0" />
+    <PackageReference Include="Reqnroll.xUnit" Version="3.3.4" />
+    <PackageReference Include="Reqnroll.Microsoft.Extensions.DependencyInjection" Version="3.3.4" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <!-- Task 2: generic container builder for the Firebase Auth emulator
          (node:24-alpine running firebase-tools). Matches Testcontainers.PostgreSql. -->
