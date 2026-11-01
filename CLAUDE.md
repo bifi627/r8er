@@ -15,6 +15,10 @@ Authority order when they disagree:
 3. `…-r8er-handover-notes.md` — **fine print + what-if hedges. Read before writing tunnel/agent/auth code.**
 4. `…-r8er-dev-environment.md` — dev env & testing strategy (this scaffold implements it)
 
+Tool/service inventory + every credential and how to rotate it: `docs/tools.md`.
+**Update it in the same diff** whenever a tool/service or credential is added,
+removed, or changed (new env secret, new image, new cloud service).
+
 ## Current state
 
 **Phase 0 POC complete — Checkpoint 1 passed 2026-07-08 (verdict: GO, proceed
