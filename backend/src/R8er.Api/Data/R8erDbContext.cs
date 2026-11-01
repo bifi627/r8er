@@ -54,6 +54,7 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
         foreach (var et in b.Model.GetEntityTypes()
                      .Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType)))
         {
+            // ! nameof() guarantees the method exists on this class
             typeof(R8erDbContext)
                 .GetMethod(nameof(ApplyTenantFilter),
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
@@ -63,5 +64,7 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
     }
 
     private void ApplyTenantFilter<T>(ModelBuilder b) where T : class, ITenantOwned
-        => b.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+    {
+        b.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+    }
 }

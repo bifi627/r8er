@@ -20,5 +20,7 @@ public static class ScenarioDeps
 
     [ScenarioDependencies]
     public static IServiceCollection Build()
-        => new ServiceCollection().AddSingleton(Shared);
+    {
+        return new ServiceCollection().AddSingleton(Shared);
+    }
 }

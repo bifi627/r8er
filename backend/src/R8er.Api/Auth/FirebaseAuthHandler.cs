@@ -22,7 +22,9 @@ public class FirebaseAuthHandler(
     {
         var header = Request.Headers.Authorization.ToString();
         if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
             return AuthenticateResult.NoResult();   // no creds → [Authorize] returns 401
+        }
 
         var idToken = header["Bearer ".Length..].Trim();
 

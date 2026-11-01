@@ -15,16 +15,24 @@ public class BrokerSteps(IntegrationFixture fx)
     const string Fp = "sha-256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89";
 
     private readonly Dictionary<string, (Guid Id, WebSocket Ws)> _agents = new();
+    // ! assigned by the browser-connect step before any step uses it
     private WebSocket _browser = null!;
     private string _session = "";
 
     [BeforeScenario]
-    public Task Reset() => fx.ResetAsync();
+    public Task Reset()
+    {
+        return fx.ResetAsync();
+    }
 
     [AfterScenario]
     public void Close()
     {
-        foreach (var (_, ws) in _agents.Values) ws.Dispose();
+        foreach (var (_, ws) in _agents.Values)
+        {
+            ws.Dispose();
+        }
+
         _browser?.Dispose();
     }
 
@@ -42,7 +50,11 @@ public class BrokerSteps(IntegrationFixture fx)
         var wsc = fx.Factory.Server.CreateWebSocketClient();
         wsc.ConfigureRequest = r => r.Headers.Authorization = $"Bearer {enrolled.GetProperty("credential").GetString()}";
         var ws = await wsc.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/agents/ws"), CancellationToken.None);
-        while (!Hub.Agents.ContainsKey(id)) await Task.Delay(10);   // server registers right after the upgrade
+        while (!Hub.Agents.ContainsKey(id))
+        {
+            await Task.Delay(10);   // server registers right after the upgrade
+        }
+
         _agents[name] = (id, ws);
     }
 
@@ -57,32 +69,49 @@ public class BrokerSteps(IntegrationFixture fx)
     [StepDefinition("agent \"(.*)\" receives the offer")]
     public async Task ThenAgentGetsOffer(string name)
     {
-        var m = (await Receive(_agents[name].Ws))!.Value;
+        var m = Assert.NotNull(await Receive(_agents[name].Ws));
         Assert.Equal("offer", m.GetProperty("type").GetString());
         Assert.Equal("v=0 fake", m.GetProperty("sdp").GetProperty("sdp").GetString());
-        _session = m.GetProperty("session").GetString()!;
+        var session = m.GetProperty("session").GetString();
+        Assert.NotNull(session);
+        _session = session;
     }
 
     [When("agent \"(.*)\" answers that session")]
-    public async Task WhenAnswer(string name) =>
+    public async Task WhenAnswer(string name)
+    {
         await Send(_agents[name].Ws, new { type = "answer", session = _session, sdp = new { type = "answer", sdp = "v=0 answer" } });
+    }
 
     [Then("the browser receives the answer")]
-    public async Task ThenBrowserGetsAnswer() =>
-        Assert.Equal("v=0 answer", (await Receive(_browser))!.Value.GetProperty("sdp").GetProperty("sdp").GetString());
+    public async Task ThenBrowserGetsAnswer()
+    {
+        Assert.Equal("v=0 answer", Assert.NotNull(await Receive(_browser)).GetProperty("sdp").GetProperty("sdp").GetString());
+    }
 
     [Then("the browser receives nothing")]
-    public async Task ThenBrowserNothing() => Assert.Null(await Receive(_browser, quiet: true));
+    public async Task ThenBrowserNothing()
+    {
+        Assert.Null(await Receive(_browser, quiet: true));
+    }
 
     [Then("agent \"(.*)\" receives nothing")]
-    public async Task ThenAgentNothing(string name) => Assert.Null(await Receive(_agents[name].Ws, quiet: true));
+    public async Task ThenAgentNothing(string name)
+    {
+        Assert.Null(await Receive(_agents[name].Ws, quiet: true));
+    }
 
     [Then("the browser is told the agent is offline or unknown")]
-    public async Task ThenBrowserError() =>
-        Assert.Equal("error", (await Receive(_browser))!.Value.GetProperty("type").GetString());
+    public async Task ThenBrowserError()
+    {
+        Assert.Equal("error", Assert.NotNull(await Receive(_browser)).GetProperty("type").GetString());
+    }
 
     [When("a browser authenticates with token \"(.*)\"")]
-    public Task WhenBadToken(string token) => BrowserAuth(token);
+    public Task WhenBadToken(string token)
+    {
+        return BrowserAuth(token);
+    }
 
     [Then("the browser socket is closed")]
     public async Task ThenClosed()
@@ -91,7 +120,10 @@ public class BrokerSteps(IntegrationFixture fx)
         Assert.Equal(WebSocketMessageType.Close, r.MessageType);
     }
 
-    private Task<string> IdToken(string email) => TokenMinter.MintIdTokenAsync(fx.EmulatorHost, email, "password123");
+    private Task<string> IdToken(string email)
+    {
+        return TokenMinter.MintIdTokenAsync(fx.EmulatorHost, email, "password123");
+    }
 
     private async Task BrowserAuth(string token)
     {
@@ -100,8 +132,10 @@ public class BrokerSteps(IntegrationFixture fx)
         await Send(_browser, new { type = "auth", token });
     }
 
-    private static Task Send(WebSocket ws, object msg) =>
-        ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(msg)), WebSocketMessageType.Text, true, CancellationToken.None);
+    private static Task Send(WebSocket ws, object msg)
+    {
+        return ws.SendAsync(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(msg)), WebSocketMessageType.Text, true, CancellationToken.None);
+    }
 
     // Next JSON message; with quiet, null if nothing arrives within a second.
     private static async Task<JsonElement?> Receive(WebSocket ws, bool quiet = false)
@@ -113,6 +147,9 @@ public class BrokerSteps(IntegrationFixture fx)
             var r = await ws.ReceiveAsync(buf, cts.Token);
             return r.MessageType == WebSocketMessageType.Close ? null : JsonDocument.Parse(buf.AsMemory(0, r.Count)).RootElement;
         }
-        catch (OperationCanceledException) when (quiet) { return null; }
+        catch (OperationCanceledException) when (quiet)
+        {
+            return null;
+        }
     }
 }

@@ -12,7 +12,10 @@ public static class RepoRoot
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !Path.Exists(Path.Combine(dir.FullName, ".git")))
+        {
             dir = dir.Parent;
+        }
+
         return dir?.FullName ?? throw new DirectoryNotFoundException("repo root (.git) not found");
     }
 }

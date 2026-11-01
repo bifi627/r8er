@@ -15,10 +15,15 @@ public class DbContextFilterTests : IAsyncLifetime
         await db.Database.MigrateAsync();
     }
 
-    public Task DisposeAsync() => _pg.DisposeAsync().AsTask();
+    public Task DisposeAsync()
+    {
+        return _pg.DisposeAsync().AsTask();
+    }
 
-    private R8erDbContext NewContext() =>
-        new(new DbContextOptionsBuilder<R8erDbContext>().UseNpgsql(_pg.GetConnectionString()).Options);
+    private R8erDbContext NewContext()
+    {
+        return new(new DbContextOptionsBuilder<R8erDbContext>().UseNpgsql(_pg.GetConnectionString()).Options);
+    }
 
     [Fact]
     public async Task Global_filter_returns_only_the_current_tenants_devices()
@@ -26,10 +31,12 @@ public class DbContextFilterTests : IAsyncLifetime
         Guid tenantA, tenantB;
         await using (var seed = NewContext())
         {
-            var a = new Tenant(); var b = new Tenant();
+            var a = new Tenant();
+            var b = new Tenant();
             seed.Tenants.AddRange(a, b);
             await seed.SaveChangesAsync();
-            tenantA = a.Id; tenantB = b.Id;
+            tenantA = a.Id;
+            tenantB = b.Id;
             seed.Devices.Add(new Device { TenantId = tenantA, Name = "a-box" });
             seed.Devices.Add(new Device { TenantId = tenantB, Name = "b-box" });
             await seed.SaveChangesAsync();
@@ -52,10 +59,12 @@ public class DbContextFilterTests : IAsyncLifetime
         Guid tenantA, tenantB;
         await using (var seed = NewContext())
         {
-            var a = new Tenant(); var b = new Tenant();
+            var a = new Tenant();
+            var b = new Tenant();
             seed.Tenants.AddRange(a, b);
             await seed.SaveChangesAsync();
-            tenantA = a.Id; tenantB = b.Id;
+            tenantA = a.Id;
+            tenantB = b.Id;
             seed.Devices.Add(new Device { TenantId = tenantA, Name = "a-box" });
             seed.Devices.Add(new Device { TenantId = tenantB, Name = "b-box" });
             await seed.SaveChangesAsync();

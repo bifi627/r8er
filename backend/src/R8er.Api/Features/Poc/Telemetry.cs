@@ -18,7 +18,10 @@ public sealed class Telemetry
 
     /// Shares the control plane's resolved connection string (Program.cs), so
     /// telemetry and EF always hit the same database.
-    public static Telemetry Create(string connString) => new(NpgsqlDataSource.Create(connString));
+    public static Telemetry Create(string connString)
+    {
+        return new(NpgsqlDataSource.Create(connString));
+    }
 
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
@@ -71,6 +74,7 @@ public sealed class Telemetry
             NpgsqlDbType = NpgsqlDbType.Jsonb,
             Value = row.RawStats is { } r ? r.GetRawText() : (object)DBNull.Value,
         });
+        // ! INSERT … RETURNING id always yields one row
         return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
@@ -93,9 +97,19 @@ public sealed class Telemetry
         while (await reader.ReadAsync(ct))
         {
             var type = Str(reader, 4);
-            if (type == "direct") direct++;
-            else if (type == "relay") relay++;
-            else if (type == "failed") failed++;
+            if (type == "direct")
+            {
+                direct++;
+            }
+            else if (type == "relay")
+            {
+                relay++;
+            }
+            else if (type == "failed")
+            {
+                failed++;
+            }
+
             rows.Add(new TelemetryListRow(
                 reader.GetInt64(0), reader.GetDateTime(1), Str(reader, 2), Str(reader, 3),
                 type, Str(reader, 5), Str(reader, 6), Str(reader, 7), Str(reader, 8), Str(reader, 9),
@@ -105,13 +119,20 @@ public sealed class Telemetry
         return new TelemetryList(new TelemetrySummary(direct + relay + failed, direct, relay, failed), rows);
     }
 
-    private static string? Str(NpgsqlDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
+    private static string? Str(NpgsqlDataReader r, int i)
+    {
+        return r.IsDBNull(i) ? null : r.GetString(i);
+    }
 
-    private static NpgsqlParameter Text(string? v) =>
-        new() { NpgsqlDbType = NpgsqlDbType.Text, Value = (object?)v ?? DBNull.Value };
+    private static NpgsqlParameter Text(string? v)
+    {
+        return new() { NpgsqlDbType = NpgsqlDbType.Text, Value = (object?)v ?? DBNull.Value };
+    }
 
-    private static NpgsqlParameter Dbl(double? v) =>
-        new() { NpgsqlDbType = NpgsqlDbType.Double, Value = (object?)v ?? DBNull.Value };
+    private static NpgsqlParameter Dbl(double? v)
+    {
+        return new() { NpgsqlDbType = NpgsqlDbType.Double, Value = (object?)v ?? DBNull.Value };
+    }
 }
 
 /// The JSON body the connect harness POSTs. camelCase over the wire; the raw

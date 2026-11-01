@@ -11,10 +11,15 @@ namespace R8er.Api.Features.Broker;
 /// out of logs); the offer may only target an online agent of the caller's tenant.
 public static class BrowserSocket
 {
-    public static void Map(IEndpointRouteBuilder app) =>
+    public static void Map(IEndpointRouteBuilder app)
+    {
         app.Map("/broker/ws", async (HttpContext ctx, R8erDbContext db, UserProvisioner provisioner) =>
         {
-            if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = StatusCodes.Status400BadRequest; return; }
+            if (!ctx.WebSockets.IsWebSocketRequest)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
             using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
             var ct = ctx.RequestAborted;
             Guid session = Guid.Empty;
@@ -23,14 +28,21 @@ public static class BrowserSocket
             {
                 // Same verify path as the HTTP API (FirebaseAuthHandler), no bypass.
                 if (await Broker.ReadAsync(socket, ct, 8 * 1024) is not { } first || (string?)first["type"] != "auth")
-                { await Broker.CloseAsync(socket, "auth first", ct); return; }
+                {
+                    await Broker.CloseAsync(socket, "auth first", ct);
+                    return;
+                }
                 AppUser user;
                 try
                 {
                     var t = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync((string?)first["token"], ct);
                     user = await provisioner.ResolveOrProvisionAsync(t.Uid, t.Claims.GetValueOrDefault("email") as string, ct);
                 }
-                catch (Exception) { await Broker.CloseAsync(socket, "unauthorized", ct); return; }
+                catch (Exception)
+                {
+                    await Broker.CloseAsync(socket, "unauthorized", ct);
+                    return;
+                }
                 db.CurrentTenantId = user.TenantId;
                 var me = new Broker.Link(socket, user.TenantId, Guid.Empty);
                 await me.SendAsync(new JsonObject { ["type"] = "ready" }, ct);
@@ -46,7 +58,7 @@ public static class BrowserSocket
                                 && await db.Devices.AnyAsync(d => d.Id == deviceId, ct)
                                 && Broker.Agents.TryGetValue(deviceId, out agent)
                                 && agent.TenantId == user.TenantId;
-                            if (!ok)
+                            if (!ok || agent is null)
                             {
                                 agent = null;
                                 await me.SendAsync(new JsonObject { ["type"] = "error", ["error"] = "agent offline or unknown" }, ct);
@@ -54,7 +66,7 @@ public static class BrowserSocket
                             }
                             session = Guid.NewGuid();
                             Broker.Sessions[session] = new Broker.Link(socket, user.TenantId, deviceId);
-                            await agent!.SendAsync(new JsonObject
+                            await agent.SendAsync(new JsonObject
                             {
                                 ["type"] = "offer",
                                 ["session"] = session.ToString(),
@@ -76,7 +88,10 @@ public static class BrowserSocket
             finally
             {
                 if (session != Guid.Empty && Broker.Sessions.TryRemove(session, out _) && agent is not null)
+                {
                     await agent.SendAsync(new JsonObject { ["type"] = "bye", ["session"] = session.ToString() }, CancellationToken.None);
+                }
             }
         });
+    }
 }
