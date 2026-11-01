@@ -4,6 +4,6 @@
 # wait-for-"All emulators ready" window, so a busy network can't flake the suite.
 # Auth emulator is Node-based — no Java/JRE needed. Pinned like every image in
 # this repo (never `latest`); bump deliberately.
-FROM node:22-alpine
-RUN npm install -g firebase-tools@15.23.0
+FROM node:24-alpine
+RUN npm install -g firebase-tools@15.34.1
 WORKDIR /app
