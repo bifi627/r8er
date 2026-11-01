@@ -1,10 +1,11 @@
 import { auth } from './firebase'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5028'
+export const API = import.meta.env.VITE_API_URL ?? 'http://localhost:5028'
 
-async function authed<T>(path: string): Promise<T> {
+export async function authed<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await auth.currentUser?.getIdToken()
   const res = await fetch(`${API}${path}`, {
+    ...init,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw new Error(`${path} → ${res.status}`)
@@ -13,7 +14,3 @@ async function authed<T>(path: string): Promise<T> {
 
 export const getMe = () =>
   authed<{ userId: string; email: string; tenantId: string }>('/me')
-export const getDevices = () =>
-  authed<{ id: string; name: string | null; lastSeenAt: string | null }[]>(
-    '/devices',
-  )

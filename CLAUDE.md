@@ -38,9 +38,18 @@ dev+prod), first-sign-in tenant provisioning, and the ONE EF global query filter
 enforcing tenant isolation are in. Integration harness: Testcontainers Postgres +
 Firebase Auth emulator, real tokens minted through the prod verify path; behaviors
 covered by Reqnroll (isolation/provisioning/auth-reject) + xUnit edges. React:
-Firebase sign-in + empty authed shell. **Next: item 2, agent pairing with
-DTLS-fingerprint pinning** (the `devices.dtls_fingerprint` / `agent_credential_hash`
-columns are the reserved placeholders).
+Firebase sign-in + empty authed shell.
+
+**Items 2+3** (design: `docs/superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`,
+supersedes the plan's QR/claim-code sketch), both on `feat/agent-pairing`. **PR A
+(onboarding):** migration #2, enrollment token → `/agents/enroll` → credential,
+authenticated `/agents/ws` heartbeat, persistent 10-year agent DTLS cert + state dir,
+local agent page (Host/Origin guard), Devices list. **PR B (broker + pairing):**
+tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto device key,
+session-bound connection auth, commit/reveal comparison code approved on the agent
+page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
+**Next: item 4** (productized agent). Naming rename agent→server / device→client
+is queued as TECH_DEBT T9.
 
 ## Stack & layout
 
@@ -51,6 +60,18 @@ columns are the reserved placeholders).
 | `agent/` | Host agent: tunnels local Jellyfin over WebRTC | Go + Pion |
 | `scripts/` | `gen-test-media.sh` (ffmpeg fixtures) | bash |
 | `dev/firebase/` | Auth emulator config for compose | — |
+
+**Vertical slices** (code organized by feature, not by layer):
+- API: `backend/src/R8er.Api/Features/<Slice>/<UseCase>.cs` — one static class per
+  use case with `Map(app)` + its handler, request/response types inline; mapped
+  explicitly in `Program.cs` (no MediatR, no assembly scanning). Shared kernel only:
+  `Data/` (DbContext, entities, migrations, tenant filter) and `Auth/`.
+- API tests mirror it: `tests/…/Features/<Slice>/` holds that slice's Reqnroll
+  `.feature` + steps and xUnit tests together; `Infrastructure/` = fixture/factory/
+  token minter; `Data/` = shared-kernel tests.
+- Agent: package per feature in `agent/internal/<slice>/` with colocated `_test.go`;
+  `cmd/agent/main.go` is wiring only. Slices don't import each other except shared
+  primitives (`identity`, `tunnel`, `pairing`).
 
 Auth = Firebase (emulator in dev). Media engine = bundled Jellyfin (pinned
 image). Hosting = Railway. TURN = Cloudflare (local coturn in dev).

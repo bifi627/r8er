@@ -1,0 +1,87 @@
+package onboarding
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+)
+
+// Enrolls once against a fake control plane, then a second start with the
+// same state dir must not spend a token again (the token is in shell history).
+func TestEnrollOnceThenReuseState(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var req map[string]string
+		json.NewDecoder(r.Body).Decode(&req)
+		if r.URL.Path != "/agents/enroll" || req["token"] != "tok" || req["fingerprint"] != "fp" {
+			http.Error(w, "bad", http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"deviceId": "dev-1", "credential": "cred-1"})
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+
+	st, err := LoadOrEnroll(context.Background(), dir, srv.URL, "tok", "fp")
+	if err != nil || st.DeviceID != "dev-1" || st.Credential != "cred-1" {
+		t.Fatalf("enroll = %+v, %v", st, err)
+	}
+	st, err = LoadOrEnroll(context.Background(), dir, srv.URL, "spent-token", "fp")
+	if err != nil || st.Credential != "cred-1" {
+		t.Fatalf("reload = %+v, %v", st, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("enroll endpoint hit %d times, want 1", calls.Load())
+	}
+}
+
+func TestEnrollRejectedTokenFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	if _, err := LoadOrEnroll(context.Background(), t.TempDir(), srv.URL, "used", "fp"); err == nil {
+		t.Fatal("want an error for a rejected token")
+	}
+}
+
+// The control socket authenticates with the credential and heartbeats the LAN URL.
+func TestRunControlHeartbeats(t *testing.T) {
+	got := make(chan map[string]string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer cred-1" {
+			http.Error(w, "no", http.StatusUnauthorized)
+			return
+		}
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		_, b, _ := c.Read(r.Context())
+		var hb map[string]string
+		json.Unmarshal(b, &hb)
+		got <- hb
+		c.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var online atomic.Bool
+	go RunControl(ctx, srv.URL, &State{Credential: "cred-1"}, "http://192.168.1.20:8097", &online, func([]byte, func(any)) {})
+	select {
+	case hb := <-got:
+		if hb["type"] != "heartbeat" || hb["lanUrl"] != "http://192.168.1.20:8097" {
+			t.Fatalf("heartbeat = %v", hb)
+		}
+	case <-ctx.Done():
+		t.Fatal("no heartbeat received")
+	}
+}

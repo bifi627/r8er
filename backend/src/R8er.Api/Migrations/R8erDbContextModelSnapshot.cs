@@ -17,7 +17,7 @@ namespace R8er.Api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.4")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -70,6 +70,9 @@ namespace R8er.Api.Migrations
                     b.Property<string>("DtlsFingerprint")
                         .HasColumnType("text");
 
+                    b.Property<string>("LanUrl")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset?>("LastSeenAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -81,9 +84,46 @@ namespace R8er.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AgentCredentialHash")
+                        .IsUnique();
+
                     b.HasIndex("TenantId");
 
                     b.ToTable("devices", (string)null);
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("enrollment_tokens", (string)null);
                 });
 
             modelBuilder.Entity("R8er.Api.Data.Tenant", b =>
@@ -115,6 +155,15 @@ namespace R8er.Api.Migrations
                 });
 
             modelBuilder.Entity("R8er.Api.Data.Device", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
                 {
                     b.HasOne("R8er.Api.Data.Tenant", null)
                         .WithMany()

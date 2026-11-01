@@ -130,7 +130,9 @@ All engineering attention goes to the streaming path.
    Firebase ID-token verification middleware; tenants (tenant = household,
    one owner account for now); device registry. Plain EF Core CRUD, no
    cleverness. React app: Firebase sign-in, empty shell.
-2. **Agent pairing — with fingerprint pinning from day one.** Claim-code
+2. **Agent pairing — with fingerprint pinning from day one.** *(Superseded
+   2026-11-01 by `../2026-11-01-r8er-agent-pairing-design.md`: enrollment token
+   in the install command, mutual pinning, comparison code instead of QR.)* Claim-code
    flow: agent prints a short code on first run → user enters it in the web
    app → agent receives a long-lived agent credential bound to the tenant.
    Pairing happens on the LAN and carries the agent's **DTLS certificate
