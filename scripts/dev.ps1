@@ -1,0 +1,33 @@
+# Run r8er locally in one command: Firebase Auth emulator (Docker) + backend + frontend.
+#
+#   powershell -File scripts/dev.ps1        # Ctrl+C stops the frontend AND the backend window
+#
+# Database: whatever the backend is configured with (user-secrets / env), e.g. a
+# Railway dev instance. Only when no connection string is set does this also start
+# the compose Postgres (the backend's built-in fallback). Auth is always the emulator.
+$ErrorActionPreference = 'Stop'
+$root = Split-Path $PSScriptRoot -Parent
+Set-Location $root
+
+docker info *> $null
+if ($LASTEXITCODE -ne 0) { throw 'Docker is not running - start Docker Desktop first.' }
+
+$services = @('firebase')
+$secrets = dotnet user-secrets list --project backend/src/R8er.Api 2>$null
+if (-not ($secrets -match '^(ConnectionStrings:Default|DATABASE_URL) =') -and
+    -not $env:ConnectionStrings__Default -and -not $env:DATABASE_URL) {
+    Write-Host 'No DB connection string configured -> also starting local compose Postgres.' -ForegroundColor Yellow
+    $services += 'postgres'
+}
+docker compose -p r8er up -d --build @services   # -p: one shared stack across clones/worktrees
+if ($LASTEXITCODE -ne 0) { throw 'docker compose up failed.' }
+
+if (-not (Test-Path frontend/node_modules)) { npm ci --prefix frontend }
+
+# Backend in its own window (launch profile: http://localhost:5028 + emulator env).
+$backend = Start-Process powershell -PassThru -ArgumentList '-NoExit', '-Command',
+    "Set-Location '$root'; dotnet run --project backend/src/R8er.Api"
+
+Write-Host "`n  app:      http://localhost:5173`n  api:      http://localhost:5028/healthz`n  emulator: http://localhost:9099 (Auth)`n" -ForegroundColor Cyan
+try { npm run dev --prefix frontend }
+finally { taskkill /T /F /PID $backend.Id *> $null }

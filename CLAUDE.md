@@ -59,6 +59,7 @@ image). Hosting = Railway. TURN = Cloudflare (local coturn in dev).
 
 ```bash
 bash scripts/check.sh                   # GOLDEN PATH: all checks (mirrors CI). Run + read output before claiming done.
+powershell -File scripts/dev.ps1        # run the app: emulator + backend (:5028) + frontend (:5173); Ctrl+C stops all
 
 docker compose up -d                    # deps: postgres, jellyfin, firebase auth emulator
 docker compose --profile relay up -d    # + local coturn (force relay via iceTransportPolicy)
@@ -72,8 +73,10 @@ go run ./cmd/agent                            # agent (from agent/)
 go test ./...                                 # agent tests (from agent/)
 ```
 
-Env: copy `.env.example` to `.env`; dev defaults need **no cloud account** —
-everything runs locally against emulator/containers.
+Env: no `.env` needed — defaults line up (backend `:5028`, frontend → `:5028`, auth →
+emulator `:9099` in `vite dev`). DB comes from backend user-secrets
+(`ConnectionStrings:Default`, e.g. a Railway dev instance); unset → compose Postgres.
+Copy `.env.example` only to override.
 
 ## Machine notes
 
