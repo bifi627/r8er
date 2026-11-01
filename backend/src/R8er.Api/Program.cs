@@ -17,8 +17,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
 // EF Core control-plane store. Key mirrors .env.example (ConnectionStrings__Default);
-// falls back to the local compose Postgres. (POC Telemetry.cs keeps its own raw
-// Npgsql connection — untouched here; it graduates in item 3.)
+// falls back to the local compose Postgres. POC Telemetry.cs shares this string.
 builder.Configuration.AddUserSecrets<Program>();
 // Railway's Postgres hands out DATABASE_URL in URL form (postgres://u:p@host:port/db),
 // which Npgsql can't parse. Accept either a native key-value string OR a URL from any
@@ -89,7 +88,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 // POC step 6 connectivity telemetry. ponytail: one shared sink, schema ensured
 // at startup; a DB outage degrades to a 503 on these two routes, never touches
 // signaling (which holds no DB dependency).
-var telemetry = Telemetry.Create(builder.Configuration);
+var telemetry = Telemetry.Create(connString);
 try
 {
     await telemetry.EnsureSchemaAsync();

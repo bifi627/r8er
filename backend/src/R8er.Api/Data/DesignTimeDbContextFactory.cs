@@ -7,7 +7,7 @@ namespace R8er.Api.Data;
 /// only registers R8erDbContext once request wiring lands — a later task).
 /// Design-time only: `migrations add` never opens a connection, so the
 /// connection string just has to parse, not resolve. Same local-compose
-/// default as Telemetry.Create's fallback.
+/// default as Program.cs's fallback.
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<R8erDbContext>
 {
     public R8erDbContext CreateDbContext(string[] args)
