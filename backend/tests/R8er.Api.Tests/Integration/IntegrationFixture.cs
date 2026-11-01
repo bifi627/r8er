@@ -56,7 +56,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
             var firebaseImage = new ImageFromDockerfileBuilder()
                 .WithDockerfileDirectory(new CommonDirectoryPath(Path.Combine(RepoRoot.Find(), "dev", "firebase")), string.Empty)
                 .WithDockerfile("Dockerfile")
-                .WithName("r8er-firebase-emulator:15.23.0")
+                .WithName("r8er-firebase-emulator:15.34.1")
                 .Build();
             await firebaseImage.CreateAsync();
 
