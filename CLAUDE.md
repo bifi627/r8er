@@ -58,6 +58,7 @@ is queued as TECH_DEBT T9.
 | `backend/` | Control plane: API + WebRTC signaling (one web app) | .NET 10, EF Core, Postgres |
 | `frontend/` | Browser client | React + Vite + TypeScript |
 | `agent/` | Host agent: tunnels local Jellyfin over WebRTC | Go + Pion |
+| `e2e/` | The one E2E golden path: browser → broker → agent → Jellyfin | Playwright + testcontainers-node |
 | `scripts/` | `gen-test-media.sh` (ffmpeg fixtures) | bash |
 | `dev/firebase/` | Auth emulator config for compose | — |
 
@@ -92,6 +93,7 @@ npm run dev --prefix frontend                 # frontend
 npm run build --prefix frontend               # frontend build check
 go run ./cmd/agent                            # agent (from agent/)
 go test ./...                                 # agent tests (from agent/)
+npm test --prefix e2e                         # E2E golden path (Playwright + Chrome, Docker; ~30s)
 ```
 
 Env: no `.env` needed — defaults line up (backend `:5028`, frontend → `:5028`, auth →

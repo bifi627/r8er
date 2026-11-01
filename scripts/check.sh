@@ -23,6 +23,9 @@ else
   echo "!! SKIPPED: go not installed locally — agent is UNVERIFIED here, CI will run it" >&2
 fi
 
+echo "== e2e: golden path (Docker + Chrome; first time: npm ci + npx playwright install chrome in e2e/) =="
+npm test --prefix e2e
+
 echo "== compose config =="
 docker compose config --quiet
 docker compose --profile relay config --quiet
