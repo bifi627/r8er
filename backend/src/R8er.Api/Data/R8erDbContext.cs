@@ -64,5 +64,7 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
     }
 
     private void ApplyTenantFilter<T>(ModelBuilder b) where T : class, ITenantOwned
-        => b.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+    {
+        b.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+    }
 }

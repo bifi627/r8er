@@ -31,10 +31,15 @@ public static class Broker
             try
             {
                 if (socket.State == WebSocketState.Open)
+                {
                     await socket.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
+                }
             }
             catch (Exception) { }   // the other end vanished; its own loop cleans up
-            finally { _send.Release(); }
+            finally
+            {
+                _send.Release();
+            }
         }
     }
 
@@ -50,7 +55,11 @@ public static class Broker
             ValueWebSocketReceiveResult r;
             do
             {
-                if (n == buffer.Length) { n = 0; tooBig = true; }   // keep draining, then drop it
+                if (n == buffer.Length)
+                {
+                    n = 0;
+                    tooBig = true;
+                }   // keep draining, then drop it
                 r = await socket.ReceiveAsync(buffer.AsMemory(n), ct);
                 if (r.MessageType == WebSocketMessageType.Close)
                 {
@@ -59,10 +68,17 @@ public static class Broker
                 }
                 n += r.Count;
             } while (!r.EndOfMessage);
-            if (tooBig) continue;
+            if (tooBig)
+            {
+                continue;
+            }
+
             try
             {
-                if (JsonNode.Parse(buffer.AsSpan(0, n)) is JsonObject o) return o;
+                if (JsonNode.Parse(buffer.AsSpan(0, n)) is JsonObject o)
+                {
+                    return o;
+                }
             }
             catch (System.Text.Json.JsonException) { }
         }
@@ -70,7 +86,10 @@ public static class Broker
 
     public static async Task CloseAsync(WebSocket socket, string reason, CancellationToken ct)
     {
-        try { await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, reason, ct); }
+        try
+        {
+            await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, reason, ct);
+        }
         catch (Exception) { }
     }
 }

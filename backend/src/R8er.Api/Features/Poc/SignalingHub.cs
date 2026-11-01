@@ -30,15 +30,20 @@ public static class SignalingHub
             while (socket.State == WebSocketState.Open)
             {
                 var msg = await socket.ReceiveAsync(buffer, ct);
-                if (msg.MessageType == WebSocketMessageType.Close) break;
+                if (msg.MessageType == WebSocketMessageType.Close)
+                {
+                    break;
+                }
 
                 // Only the other peer's read loop writes to a given socket, so
                 // there is exactly one writer per socket — SendAsync stays safe.
                 var peer = r.Other(socket);
                 if (peer is { State: WebSocketState.Open })
+                {
                     await peer.SendAsync(
                         buffer.AsMemory(0, msg.Count),
                         msg.MessageType, msg.EndOfMessage, ct);
+                }
             }
         }
         // A per-connection relay must never crash the process. Any error (peer
@@ -48,7 +53,10 @@ public static class SignalingHub
         finally
         {
             r.Leave(socket);
-            if (r.IsEmpty) Rooms.TryRemove(room, out _);
+            if (r.IsEmpty)
+            {
+                Rooms.TryRemove(room, out _);
+            }
         }
     }
 
@@ -65,7 +73,14 @@ public static class SignalingHub
             lock (_lock)
             {
                 for (var i = 0; i < 2; i++)
-                    if (_slots[i] is null) { _slots[i] = s; return true; }
+                {
+                    if (_slots[i] is null)
+                    {
+                        _slots[i] = s;
+                        return true;
+                    }
+                }
+
                 return false;
             }
         }
@@ -73,19 +88,34 @@ public static class SignalingHub
         public T? Other(T s)
         {
             lock (_lock)
+            {
                 return _slots[0] == s ? _slots[1] : _slots[0];
+            }
         }
 
         public void Leave(T s)
         {
             lock (_lock)
+            {
                 for (var i = 0; i < 2; i++)
-                    if (_slots[i] == s) _slots[i] = null;
+                {
+                    if (_slots[i] == s)
+                    {
+                        _slots[i] = null;
+                    }
+                }
+            }
         }
 
         public bool IsEmpty
         {
-            get { lock (_lock) return _slots[0] is null && _slots[1] is null; }
+            get
+            {
+                lock (_lock)
+                {
+                    return _slots[0] is null && _slots[1] is null;
+                }
+            }
         }
     }
 }

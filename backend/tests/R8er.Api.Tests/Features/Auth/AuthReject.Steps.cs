@@ -25,5 +25,8 @@ public class AuthRejectSteps(IntegrationFixture fx)
     }
 
     [Then("the response status is (.*)")]
-    public void ThenStatus(int expected) => Assert.Equal(expected, _status);
+    public void ThenStatus(int expected)
+    {
+        Assert.Equal(expected, _status);
+    }
 }

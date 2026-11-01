@@ -48,9 +48,11 @@ if (FirebaseApp.DefaultInstance is null)
     var serviceAccountJson = (Environment.GetEnvironmentVariable("FIREBASE_SERVICE_ACCOUNT_JSON")
         ?? builder.Configuration["FIREBASE_SERVICE_ACCOUNT_JSON"])?.Trim();
     if (!usingEmulator && string.IsNullOrEmpty(serviceAccountJson))
+    {
         throw new InvalidOperationException(
             "FIREBASE_SERVICE_ACCOUNT_JSON is empty at runtime (and no emulator host set). " +
             "The process cannot see the env var — check it's set on the running service, not just build.");
+    }
     // Typed parse rejects non-service-account JSON (why GoogleCredential.FromJson was deprecated).
     FirebaseApp.Create(new AppOptions
     {
@@ -69,14 +71,18 @@ builder.Services.AddAuthorization();
 // Railway (and any container host) inject the port via $PORT. ponytail:
 // one-line bind; no-op locally where launchSettings sets the URL.
 if (Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } port)
+{
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
 
 var app = builder.Build();
 
 // ponytail: single-instance MVP — migrate on boot. Move to a deploy/CI step if we
 // ever run multiple API instances (concurrent migrate is unsafe).
 using (var scope = app.Services.CreateScope())
+{
     await scope.ServiceProvider.GetRequiredService<R8erDbContext>().Database.MigrateAsync();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

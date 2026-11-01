@@ -15,8 +15,10 @@ public static class TokenMinter
         var signUpUrl = $"http://{emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key";
         var signUpResp = await http.PostAsJsonAsync(signUpUrl, payload);
         if (signUpResp.IsSuccessStatusCode)
+        {
             return (await signUpResp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("idToken").GetString()
                 ?? throw new InvalidOperationException("emulator response without idToken");
+        }
 
         // The emulator's users aren't reset by IntegrationFixture.ResetAsync (that
         // only truncates Postgres), so a scenario that signs the same email in more
@@ -27,7 +29,9 @@ public static class TokenMinter
         var errorBody = await signUpResp.Content.ReadFromJsonAsync<JsonElement>();
         var errorMessage = errorBody.GetProperty("error").GetProperty("message").GetString();
         if (errorMessage != "EMAIL_EXISTS")
+        {
             signUpResp.EnsureSuccessStatusCode(); // not the expected conflict — surface the real failure
+        }
 
         var signInUrl = $"http://{emulatorHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake-api-key";
         var signInResp = await http.PostAsJsonAsync(signInUrl, payload);

@@ -15,11 +15,14 @@ public static partial class Enroll
     [GeneratedRegex("^sha-256 ([0-9A-F]{2}:){31}[0-9A-F]{2}$")]
     private static partial Regex FingerprintRe();
 
-    public static void Map(IEndpointRouteBuilder app) =>
+    public static void Map(IEndpointRouteBuilder app)
+    {
         app.MapPost("/agents/enroll", async (Request req, R8erDbContext db, CancellationToken ct) =>
         {
             if (req.Token is not { Length: > 0 } || req.Fingerprint is null || !FingerprintRe().IsMatch(req.Fingerprint))
+            {
                 return Results.BadRequest();
+            }
 
             var hash = Secrets.Hash(req.Token);
             var now = DateTimeOffset.UtcNow;
@@ -30,7 +33,11 @@ public static partial class Enroll
             var tokens = db.EnrollmentTokens.IgnoreQueryFilters().Where(t => t.TokenHash == hash);
             var claimed = await tokens.Where(t => t.UsedAt == null && t.ExpiresAt > now)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.UsedAt, now), ct);
-            if (claimed != 1) return Results.Unauthorized();
+            if (claimed != 1)
+            {
+                return Results.Unauthorized();
+            }
+
             var tenantId = await tokens.Select(t => t.TenantId).SingleAsync(ct);
 
             var credential = Secrets.New(32);   // 256 bit
@@ -46,4 +53,5 @@ public static partial class Enroll
             await tx.CommitAsync(ct);
             return Results.Ok(new { deviceId = device.Id, credential });
         });
+    }
 }

@@ -11,7 +11,10 @@ public class UserProvisioner(R8erDbContext db)
     public async Task<AppUser> ResolveOrProvisionAsync(string firebaseUid, string? email, CancellationToken ct)
     {
         var existing = await db.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid, ct);
-        if (existing is not null) return existing;
+        if (existing is not null)
+        {
+            return existing;
+        }
 
         var tenant = new Tenant();
         db.Tenants.Add(tenant);                 // EF assigns client-generated Guid on Add

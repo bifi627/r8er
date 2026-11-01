@@ -23,7 +23,10 @@ public class OnboardingSteps(IntegrationFixture fx)
     private readonly Dictionary<string, string> _credentials = new();
 
     [BeforeScenario]
-    public Task Reset() => fx.ResetAsync();
+    public Task Reset()
+    {
+        return fx.ResetAsync();
+    }
 
     private async Task<HttpClient> SignIn(string email)
     {
@@ -58,7 +61,10 @@ public class OnboardingSteps(IntegrationFixture fx)
     }
 
     [Given("\"(.*)\" created an enrollment token")]
-    public async Task GivenToken(string email) => _token = await CreateToken(email);
+    public async Task GivenToken(string email)
+    {
+        _token = await CreateToken(email);
+    }
 
     [Given("the token has expired")]
     public async Task GivenExpired()
@@ -81,16 +87,28 @@ public class OnboardingSteps(IntegrationFixture fx)
     }
 
     [When("an agent enrolls with that token")]
-    public async Task WhenEnroll() => _enrollStatus = (await Enroll(_token)).StatusCode;
+    public async Task WhenEnroll()
+    {
+        _enrollStatus = (await Enroll(_token)).StatusCode;
+    }
 
     [Then("the enrollment is accepted")]
-    public void ThenAccepted() => Assert.Equal(HttpStatusCode.OK, _enrollStatus);
+    public void ThenAccepted()
+    {
+        Assert.Equal(HttpStatusCode.OK, _enrollStatus);
+    }
 
     [Then("the enrollment is rejected")]
-    public void ThenRejected() => Assert.Equal(HttpStatusCode.Unauthorized, _enrollStatus);
+    public void ThenRejected()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, _enrollStatus);
+    }
 
     [Then("\"(.*)\" sees ([0-9]+) devices?")]
-    public async Task ThenSeesCount(string email, int n) => Assert.Equal(n, (await Devices(email)).GetArrayLength());
+    public async Task ThenSeesCount(string email, int n)
+    {
+        Assert.Equal(n, (await Devices(email)).GetArrayLength());
+    }
 
     private async Task<WebSocket> Connect(string credential)
     {
@@ -102,12 +120,21 @@ public class OnboardingSteps(IntegrationFixture fx)
     [When("an agent connects with credential \"(.*)\"")]
     public async Task WhenConnect(string credential)
     {
-        try { (await Connect(credential)).Dispose(); }
-        catch (InvalidOperationException) { _refused = true; }   // TestServer: handshake got a non-101 status
+        try
+        {
+            (await Connect(credential)).Dispose();
+        }
+        catch (InvalidOperationException)
+        {
+            _refused = true;
+        }   // TestServer: handshake got a non-101 status
     }
 
     [Then("the agent connection is refused")]
-    public void ThenRefused() => Assert.True(_refused);
+    public void ThenRefused()
+    {
+        Assert.True(_refused);
+    }
 
     [When("agent \"(.*)\" heartbeats with LAN URL \"(.*)\"")]
     public async Task WhenHeartbeat(string name, string lanUrl)
@@ -118,8 +145,10 @@ public class OnboardingSteps(IntegrationFixture fx)
         await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);   // server finishes the frame first
     }
 
-    private async Task<JsonElement> Device(string email, string name) =>
-        (await Devices(email)).EnumerateArray().Single(d => d.GetProperty("name").GetString() == name);
+    private async Task<JsonElement> Device(string email, string name)
+    {
+        return (await Devices(email)).EnumerateArray().Single(d => d.GetProperty("name").GetString() == name);
+    }
 
     [Then("\"(.*)\" sees \"(.*)\" online at \"(.*)\"")]
     public async Task ThenOnline(string email, string name, string lanUrl)
@@ -130,6 +159,8 @@ public class OnboardingSteps(IntegrationFixture fx)
     }
 
     [Then("\"(.*)\" sees \"(.*)\" offline")]
-    public async Task ThenOffline(string email, string name) =>
+    public async Task ThenOffline(string email, string name)
+    {
         Assert.False((await Device(email, name)).GetProperty("online").GetBoolean());
+    }
 }

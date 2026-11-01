@@ -10,7 +10,8 @@ namespace R8er.Api.Features.Broker;
 /// brokered browser sessions (answer/ice back to the session's browser).
 public static class AgentSocket
 {
-    public static void Map(IEndpointRouteBuilder app) =>
+    public static void Map(IEndpointRouteBuilder app)
+    {
         app.Map("/agents/ws", async (HttpContext ctx, R8erDbContext db) =>
         {
             var header = ctx.Request.Headers.Authorization.ToString();
@@ -19,8 +20,16 @@ public static class AgentSocket
             // Tenant-filter exception 2 of 2: the credential establishes the tenant.
             var device = credential.Length == 0 ? null
                 : await db.Devices.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.AgentCredentialHash == hash, ctx.RequestAborted);
-            if (device is null) { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return; }
-            if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = StatusCodes.Status400BadRequest; return; }
+            if (device is null)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+            if (!ctx.WebSockets.IsWebSocketRequest)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+                return;
+            }
 
             db.CurrentTenantId = device.TenantId;   // filter live from here on
             using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
@@ -45,25 +54,37 @@ public static class AgentSocket
                             if (Guid.TryParse((string?)msg["session"], out var sid)
                                 && Broker.Sessions.TryGetValue(sid, out var browser)
                                 && browser.DeviceId == device.Id)
+                            {
                                 await browser.SendAsync(Relay(msg), ct);
+                            }
+
                             break;
                     }
                 }
             }
             catch (Exception) { }   // a dropped agent socket must never crash the process
-            finally { Broker.Agents.TryRemove(new(device.Id, me)); }
+            finally
+            {
+                Broker.Agents.TryRemove(new(device.Id, me));
+            }
         });
+    }
 
     // Forward only the fields the protocol defines (docs/protocol.md).
-    static JsonObject Relay(JsonObject m) => new()
+    static JsonObject Relay(JsonObject m)
     {
-        ["type"] = (string?)m["type"],
-        ["sdp"] = m["sdp"]?.DeepClone(),
-        ["candidate"] = m["candidate"]?.DeepClone(),
-    };
+        return new()
+        {
+            ["type"] = (string?)m["type"],
+            ["sdp"] = m["sdp"]?.DeepClone(),
+            ["candidate"] = m["candidate"]?.DeepClone(),
+        };
+    }
 
     // The web app renders this as a link: only plain http(s) URLs, never javascript: etc.
-    static string? SafeLanUrl(string? s) =>
-        s is { Length: <= 200 } && Uri.TryCreate(s, UriKind.Absolute, out var u) && u.Scheme is "http" or "https"
+    static string? SafeLanUrl(string? s)
+    {
+        return s is { Length: <= 200 } && Uri.TryCreate(s, UriKind.Absolute, out var u) && u.Scheme is "http" or "https"
             ? u.ToString() : null;
+    }
 }

@@ -27,17 +27,26 @@ public sealed class IntegrationFixture : IAsyncLifetime
     public R8erApiFactory Factory => _shared.Factory;
     public string EmulatorHost => _shared.EmulatorHost;
 
-    public async Task InitializeAsync() => _shared = await Shared.Value;
+    public async Task InitializeAsync()
+    {
+        _shared = await Shared.Value;
+    }
 
     // No-op: the shared containers live for the whole process (started at most
     // once via the Lazy above) since more than one owner (xUnit's collection
     // fixture, Reqnroll's ScenarioDeps) holds an IntegrationFixture pointing at
     // them. Testcontainers' Ryuk sidecar reaps the containers when the process
     // exits, so nothing leaks.
-    public Task DisposeAsync() => Task.CompletedTask;
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
 
     /// Per-test reset: truncate all tenant data (lazy, no Respawn dependency).
-    public Task ResetAsync() => _shared.ResetAsync();
+    public Task ResetAsync()
+    {
+        return _shared.ResetAsync();
+    }
 
     private sealed class SharedContainers(PostgreSqlContainer pg, IContainer firebase, R8erApiFactory factory, string emulatorHost)
     {

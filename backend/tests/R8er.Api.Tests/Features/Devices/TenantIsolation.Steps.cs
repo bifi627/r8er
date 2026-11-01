@@ -14,7 +14,10 @@ public class TenantIsolationSteps(IntegrationFixture fx)
     private JsonElement _lastList;
 
     [BeforeScenario]
-    public Task Reset() => fx.ResetAsync();
+    public Task Reset()
+    {
+        return fx.ResetAsync();
+    }
 
     private async Task<HttpClient> SignIn(string email)
     {
@@ -26,7 +29,10 @@ public class TenantIsolationSteps(IntegrationFixture fx)
     }
 
     [Given("a signed-in user \"(.*)\"")]
-    public async Task GivenSignedIn(string email) => (await SignIn(email)).Dispose();
+    public async Task GivenSignedIn(string email)
+    {
+        (await SignIn(email)).Dispose();
+    }
 
     [Given("that user's tenant owns a device named \"(.*)\"")]
     public async Task GivenOwnsDevice(string name)
@@ -47,7 +53,10 @@ public class TenantIsolationSteps(IntegrationFixture fx)
     }
 
     [Then("the device list is empty")]
-    public void ThenEmpty() => Assert.Equal(0, _lastList.GetArrayLength());
+    public void ThenEmpty()
+    {
+        Assert.Equal(0, _lastList.GetArrayLength());
+    }
 
     [Then("the device list contains \"(.*)\"")]
     public void ThenContains(string name)
