@@ -36,3 +36,6 @@ dev/.cloudflare-turn.json
 
 # Reqnroll anonymous-telemetry id dropped next to the test project (local state)
 backend/tests/**/Reqnroll/
+
+# Agent state dir (persistent DTLS cert + credential) from local runs
+r8er-state/

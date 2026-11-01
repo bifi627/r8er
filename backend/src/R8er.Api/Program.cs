@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Security.Claims;
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication;
@@ -7,6 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using R8er.Api;
 using R8er.Api.Auth;
 using R8er.Api.Data;
+using R8er.Api.Features.Devices;
+using R8er.Api.Features.Me;
+using R8er.Api.Features.Onboarding;
+using R8er.Api.Features.Poc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,59 +88,13 @@ app.UseStaticFiles();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
-// POC step 6 connectivity telemetry. ponytail: one shared sink, schema ensured
-// at startup; a DB outage degrades to a 503 on these two routes, never touches
-// signaling (which holds no DB dependency).
-var telemetry = Telemetry.Create(connString);
-try
-{
-    await telemetry.EnsureSchemaAsync();
-}
-catch (Exception ex)
-{
-    // Telemetry is best-effort POC instrumentation; a missing/unreachable DB
-    // must not take signaling down with it. Log and carry on — the /telemetry
-    // routes will surface their own errors when actually hit.
-    app.Logger.LogWarning(ex, "telemetry: schema init failed; endpoints will error until DB is reachable");
-}
-
-app.MapPost("/telemetry/poc", async (TelemetryRow row, HttpContext ctx, CancellationToken ct) =>
-{
-    var id = await telemetry.InsertAsync(row, ctx.Request.Headers.UserAgent.ToString(), ct);
-    return Results.Ok(new { id });
-});
-
-app.MapGet("/telemetry/poc", (CancellationToken ct) => telemetry.ListAsync(ct: ct));
-
-// WebRTC signaling: relay SDP/ICE between the two peers sharing a room id.
-app.Map("/signaling/{room}", async (HttpContext ctx, string room) =>
-{
-    if (!ctx.WebSockets.IsWebSocketRequest)
-    {
-        ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-        return;
-    }
-
-    using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
-    await SignalingHub.RunAsync(room, socket, ctx.RequestAborted);
-});
-
-// Signed-in user + their tenant. First call for a new Firebase UID provisions
-// tenant+user in the auth handler.
-app.MapGet("/me", (ClaimsPrincipal user) => Results.Ok(new
-{
-    userId = user.FindFirstValue(ClaimTypes.NameIdentifier),
-    email = user.FindFirstValue(ClaimTypes.Email),
-    tenantId = user.FindFirstValue("tenant_id"),
-})).RequireAuthorization();
-
-// The caller's devices — auto-scoped by the global tenant filter (empty until
-// pairing lands in item 2). No hand-written tenant Where: the filter enforces it.
-app.MapGet("/devices", async (R8erDbContext db, CancellationToken ct) =>
-    await db.Devices.OrderBy(d => d.CreatedAt)
-        .Select(d => new { d.Id, d.Name, d.LastSeenAt })
-        .ToListAsync(ct))
-    .RequireAuthorization();
+// Vertical slices: one file per use case under Features/<Slice>/, mapped here.
+await PocEndpoints.MapAsync(app, connString);
+GetMe.Map(app);
+ListDevices.Map(app);
+CreateEnrollmentToken.Map(app);
+Enroll.Map(app);
+AgentSocket.Map(app);
 
 app.Run();
 

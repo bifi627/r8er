@@ -1,0 +1,131 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using R8er.Api.Data;
+using R8er.Api.Tests.Infrastructure;
+using Reqnroll;
+
+namespace R8er.Api.Tests.Features.Onboarding;
+
+[Binding]
+public class OnboardingSteps(IntegrationFixture fx)
+{
+    const string Fp = "sha-256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89";
+
+    private string _token = "";
+    private HttpStatusCode _enrollStatus;
+    private bool _refused;
+    private readonly Dictionary<string, string> _credentials = new();
+
+    [BeforeScenario]
+    public Task Reset() => fx.ResetAsync();
+
+    private async Task<HttpClient> SignIn(string email)
+    {
+        var token = await TokenMinter.MintIdTokenAsync(fx.EmulatorHost, email, "password123");
+        var client = fx.Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private async Task<string> CreateToken(string email)
+    {
+        using var client = await SignIn(email);
+        var res = await client.PostAsync("/agents/enrollment-tokens", null);
+        res.EnsureSuccessStatusCode();
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(body.GetProperty("token").GetString()!, body.GetProperty("installCommand").GetString());
+        return body.GetProperty("token").GetString()!;
+    }
+
+    private async Task<HttpResponseMessage> Enroll(string token, string name = "box")
+    {
+        using var client = fx.Factory.CreateClient();
+        return await client.PostAsJsonAsync("/agents/enroll", new { token, fingerprint = Fp, name });
+    }
+
+    private async Task<JsonElement> Devices(string email)
+    {
+        using var client = await SignIn(email);
+        return await client.GetFromJsonAsync<JsonElement>("/devices");
+    }
+
+    [Given("\"(.*)\" created an enrollment token")]
+    public async Task GivenToken(string email) => _token = await CreateToken(email);
+
+    [Given("the token has expired")]
+    public async Task GivenExpired()
+    {
+        using var scope = fx.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<R8erDbContext>();
+        await db.EnrollmentTokens.IgnoreQueryFilters()
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.ExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+    }
+
+    [Given("\"(.*)\" has an enrolled agent \"(.*)\"")]
+    public async Task GivenEnrolled(string email, string name)
+    {
+        var res = await Enroll(await CreateToken(email), name);
+        res.EnsureSuccessStatusCode();
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        _credentials[name] = body.GetProperty("credential").GetString()!;
+    }
+
+    [When("an agent enrolls with that token")]
+    public async Task WhenEnroll() => _enrollStatus = (await Enroll(_token)).StatusCode;
+
+    [Then("the enrollment is accepted")]
+    public void ThenAccepted() => Assert.Equal(HttpStatusCode.OK, _enrollStatus);
+
+    [Then("the enrollment is rejected")]
+    public void ThenRejected() => Assert.Equal(HttpStatusCode.Unauthorized, _enrollStatus);
+
+    [Then("\"(.*)\" sees ([0-9]+) devices?")]
+    public async Task ThenSeesCount(string email, int n) => Assert.Equal(n, (await Devices(email)).GetArrayLength());
+
+    private async Task<WebSocket> Connect(string credential)
+    {
+        var ws = fx.Factory.Server.CreateWebSocketClient();
+        ws.ConfigureRequest = r => r.Headers.Authorization = $"Bearer {credential}";
+        return await ws.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/agents/ws"), CancellationToken.None);
+    }
+
+    [When("an agent connects with credential \"(.*)\"")]
+    public async Task WhenConnect(string credential)
+    {
+        try { (await Connect(credential)).Dispose(); }
+        catch (InvalidOperationException) { _refused = true; }   // TestServer: handshake got a non-101 status
+    }
+
+    [Then("the agent connection is refused")]
+    public void ThenRefused() => Assert.True(_refused);
+
+    [When("agent \"(.*)\" heartbeats with LAN URL \"(.*)\"")]
+    public async Task WhenHeartbeat(string name, string lanUrl)
+    {
+        using var ws = await Connect(_credentials[name]);
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "heartbeat", lanUrl }));
+        await ws.SendAsync(msg, WebSocketMessageType.Text, true, CancellationToken.None);
+        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);   // server finishes the frame first
+    }
+
+    private async Task<JsonElement> Device(string email, string name) =>
+        (await Devices(email)).EnumerateArray().Single(d => d.GetProperty("name").GetString() == name);
+
+    [Then("\"(.*)\" sees \"(.*)\" online at \"(.*)\"")]
+    public async Task ThenOnline(string email, string name, string lanUrl)
+    {
+        var d = await Device(email, name);
+        Assert.True(d.GetProperty("online").GetBoolean());
+        Assert.Equal(lanUrl, d.GetProperty("lanUrl").GetString());
+    }
+
+    [Then("\"(.*)\" sees \"(.*)\" offline")]
+    public async Task ThenOffline(string email, string name) =>
+        Assert.False((await Device(email, name)).GetProperty("online").GetBoolean());
+}

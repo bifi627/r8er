@@ -1,10 +1,38 @@
 # r8er signaling protocol
 
-Contract-first (per CLAUDE.md). This is the **POC seed** — just enough to
+Contract-first (per CLAUDE.md). Below the onboarding section, this is the **POC seed** — just enough to
 carry a WebRTC handshake between two peers through the signaling relay. Codegen
 (C#/Go/TS from one schema) is deferred until the protocol stabilizes; for now
-the envelope is hand-mirrored in Go (`agent/cmd/agent/main.go`) and JS
+the envelope is hand-mirrored in Go (`agent/internal/poc`, `agent/internal/tunnel`) and JS
 (`dev/throughput.html`, `dev/tunnel.html`).
+
+## Agent onboarding (MVP item 2)
+
+Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`.
+Fingerprints everywhere use the form `sha-256 AA:BB:…` (32 upper-case hex
+pairs, SHA-256 over the DER certificate).
+
+**`POST /agents/enrollment-tokens`** (Firebase Bearer) →
+`{ token, expiresAt, installCommand, installCommandPowershell }`. Token is
+random 128 bit, single-use, 15 min; server stores only its SHA-256.
+
+**`POST /agents/enroll`** (no auth — the token is the auth)
+```json
+{ "token": "…", "fingerprint": "sha-256 AB:…", "name": "nas" }
+```
+→ `200 { "deviceId": "<uuid>", "credential": "…" }` (credential: 256 bit,
+shown once, server keeps its SHA-256) · `400` malformed fingerprint ·
+`401` token unknown, expired, or used.
+
+**`GET /agents/ws`** — agent control WebSocket, `Authorization: Bearer
+<credential>` (`401` before upgrade if unknown). Agent → server, one JSON text
+frame on connect and every 30 s:
+```json
+{ "type": "heartbeat", "lanUrl": "http://192.168.1.20:8097" }
+```
+Server sets `last_seen_at = now` and `lan_url` (http/https only, else null).
+`GET /devices` reports `online` = last heartbeat within 90 s. PR B adds
+signaling messages on this socket.
 
 ## Transport
 

@@ -7,7 +7,8 @@ import {
   type User,
 } from 'firebase/auth'
 import { auth } from './firebase'
-import { getMe, getDevices } from './api'
+import { getMe } from './api'
+import { Devices } from './features/devices/Devices'
 
 function SignIn() {
   const [email, setEmail] = useState('')
@@ -58,16 +59,9 @@ function SignIn() {
 
 function Shell({ user }: { user: User }) {
   const [tenantId, setTenantId] = useState('')
-  const [devices, setDevices] = useState<{ id: string; name: string | null }[]>(
-    [],
-  )
-
   useEffect(() => {
     getMe()
       .then((m) => setTenantId(m.tenantId))
-      .catch(() => {})
-    getDevices()
-      .then(setDevices)
       .catch(() => {})
   }, [])
 
@@ -80,16 +74,7 @@ function Shell({ user }: { user: User }) {
         </button>
       </header>
       <p style={{ color: '#888', fontSize: 12 }}>tenant {tenantId}</p>
-      <h2>Devices</h2>
-      {devices.length === 0 ? (
-        <p>No devices yet — pairing comes next.</p>
-      ) : (
-        <ul>
-          {devices.map((d) => (
-            <li key={d.id}>{d.name ?? d.id}</li>
-          ))}
-        </ul>
-      )}
+      <Devices />
     </main>
   )
 }

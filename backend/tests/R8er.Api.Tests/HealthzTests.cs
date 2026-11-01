@@ -1,4 +1,4 @@
-using R8er.Api.Tests.Integration;
+using R8er.Api.Tests.Infrastructure;
 
 namespace R8er.Api.Tests;
 
