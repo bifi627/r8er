@@ -6,6 +6,7 @@ import {
   authMessage,
   comparisonCode,
   fingerprint,
+  pinCheck,
   sdpFingerprint,
 } from './crypto.ts'
 
@@ -63,4 +64,12 @@ test('sdp fingerprint is normalized', () => {
     sdpFingerprint('v=0\r\na=fingerprint:sha-256 ab:cd\r\n'),
     'sha-256 AB:CD',
   )
+})
+
+test('pin check: pinned cert passes, changed cert refused unless pairing', () => {
+  assert.equal(pinCheck(v.agentFp, v.agentFp, false), 'pinned')
+  assert.equal(pinCheck(v.agentFp, v.browserFp, false), 'refuse') // MITM / cert swapped
+  assert.equal(pinCheck(v.agentFp, v.browserFp, true), 'unpinned') // re-pair: code must vouch
+  assert.equal(pinCheck(undefined, v.agentFp, true), 'unpinned') // first pairing
+  assert.equal(pinCheck(undefined, v.agentFp, false), 'unpinned') // agent will say unpaired
 })

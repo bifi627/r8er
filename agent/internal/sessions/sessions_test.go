@@ -35,7 +35,7 @@ func TestPairThenTunnel(t *testing.T) {
 	agent := &Sessions{Cert: cert, Fp: fp, Store: store, Client: http.DefaultClient, Origin: origin.URL}
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
-	b := connect(t, agent, "s1", key)
+	b := connect(t, agent, "s1", key, false)
 	if b.say(nil)["type"] != "unpaired" {
 		t.Fatal("want unpaired for an unknown key")
 	}
@@ -62,11 +62,16 @@ func TestPairThenTunnel(t *testing.T) {
 		t.Fatalf("tunnel after approve = %q", got)
 	}
 
-	if connect(t, agent, "s2", key).say(nil)["type"] != "ok" {
+	if connect(t, agent, "s2", key, false).say(nil)["type"] != "ok" {
 		t.Fatal("paired key not recognised on a new session")
 	}
+	// A browser whose pin doesn't match (agent cert changed) forces the code
+	// comparison even though its key is allowlisted.
+	if connect(t, agent, "s2b", key, true).say(nil)["type"] != "unpaired" {
+		t.Fatal("pair flag must force pairing")
+	}
 	other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if connect(t, agent, "s3", other).say(nil)["type"] != "unpaired" {
+	if connect(t, agent, "s3", other, false).say(nil)["type"] != "unpaired" {
 		t.Fatal("a different key must not inherit the pairing")
 	}
 }
@@ -80,7 +85,7 @@ type browser struct {
 
 // connect wires a browser peer to the agent through Handle (no network broker)
 // and answers the challenge with a session-bound signature.
-func connect(t *testing.T, agent *Sessions, id string, key *ecdsa.PrivateKey) *browser {
+func connect(t *testing.T, agent *Sessions, id string, key *ecdsa.PrivateKey, pair bool) *browser {
 	t.Helper()
 	bcert, _ := webrtc.GenerateCertificate(key) // any cert; its fp is what gets signed
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{Certificates: []webrtc.Certificate{*bcert}})
@@ -115,7 +120,7 @@ func connect(t *testing.T, agent *Sessions, id string, key *ecdsa.PrivateKey) *b
 	msg := sha256.Sum256(pairing.AuthMessage(agent.Fp, identity.Fingerprint(blk.Bytes), ch["n"].(string)))
 	r, s, _ := ecdsa.Sign(rand.Reader, key, msg[:])
 	sig := append(r.FillBytes(make([]byte, 32)), s.FillBytes(make([]byte, 32))...) // P1363, like WebCrypto
-	b.send(map[string]any{"type": "auth", "spki": spki(key), "sig": sig})
+	b.send(map[string]any{"type": "auth", "spki": spki(key), "sig": sig, "pair": pair})
 	return b
 }
 

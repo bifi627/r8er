@@ -72,8 +72,8 @@ it is authorized, the agent closes every other channel immediately.
 | # | direction | message |
 |---|---|---|
 | 1 | agent → browser | `{type:"challenge", n}` — n = hex(32 random bytes) |
-| 2 | browser → agent | `{type:"auth", spki, sig}` (base64). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("r8er-auth-v1\|" + agentDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
-| 3 | agent → browser | `{type:"ok"}` (key on the allowlist → tunnel channels allowed) or `{type:"unpaired"}` |
+| 2 | browser → agent | `{type:"auth", spki, sig, pair}` (base64; `pair:true` when the browser has no pin matching this agent cert — forces steps 4–8 even for an allowlisted key, so a changed cert is only accepted via the code). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("r8er-auth-v1\|" + agentDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
+| 3 | agent → browser | `{type:"ok"}` (key on the allowlist and no `pair` → tunnel channels allowed) or `{type:"unpaired"}` |
 | 4 | browser → agent | `{type:"commit", h, name}` — h = hex(SHA-256(utf8(nB))), nB = hex(32 random bytes) |
 | 5 | agent → browser | `{type:"nonce", n: nA}` — only after the commit |
 | 6 | browser → agent | `{type:"reveal", n: nB}` — agent checks it against h |

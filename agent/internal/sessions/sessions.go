@@ -131,6 +131,7 @@ type authMsg struct {
 	Sig  []byte `json:"sig,omitempty"`
 	H    string `json:"h,omitempty"` // commit
 	Name string `json:"name,omitempty"`
+	Pair bool   `json:"pair,omitempty"`   // auth: browser has no matching pin → force the code comparison
 	Why  string `json:"reason,omitempty"` // rejected
 }
 
@@ -163,7 +164,7 @@ func (s *Sessions) serveAuth(pc *webrtc.PeerConnection, d *webrtc.DataChannel, a
 				return
 			}
 			keyFp = fp
-			if s.Store.Allowed(fp) {
+			if s.Store.Allowed(fp) && !m.Pair {
 				authed.Store(true)
 				say(authMsg{Type: "ok"})
 			} else {

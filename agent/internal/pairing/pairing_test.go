@@ -62,3 +62,20 @@ func TestApprovePersistsAndPendingCaps(t *testing.T) {
 		t.Fatal("want an error past MaxPending")
 	}
 }
+
+// Remove on the agent page: the key is no longer allowed, also after a restart.
+func TestRemovePersists(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir)
+	go s.Ask("phone", "fp-1", "123456")
+	for len(s.Pending()) == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	s.Decide(s.Pending()[0].ID, true)
+	if err := s.Remove("fp-1"); err != nil || s.Allowed("fp-1") {
+		t.Fatalf("still allowed after Remove (err %v)", err)
+	}
+	if s2, _ := Open(dir); s2.Allowed("fp-1") {
+		t.Fatal("Remove not persisted")
+	}
+}

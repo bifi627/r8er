@@ -46,3 +46,19 @@ export async function comparisonCode(
 }
 
 export const nonce = () => hex(crypto.getRandomValues(new Uint8Array(32)))
+
+/**
+ * The browser's pin decision for the agent cert in the answer SDP:
+ * - `pinned`: matches the pin → the agent's plain "ok" may be trusted
+ * - `unpinned`: no pin, or pairing again → only the code comparison may vouch
+ *   for this cert (auth carries `pair: true`)
+ * - `refuse`: mismatch outside pairing → stop before sending a byte
+ */
+export function pinCheck(
+  pin: string | undefined,
+  agentFp: string,
+  pairing: boolean,
+): 'pinned' | 'unpinned' | 'refuse' {
+  if (pin === agentFp) return 'pinned'
+  return pin && !pairing ? 'refuse' : 'unpinned'
+}

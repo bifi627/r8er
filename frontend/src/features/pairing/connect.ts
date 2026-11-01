@@ -9,6 +9,7 @@ import {
   comparisonCode,
   hex,
   nonce,
+  pinCheck,
   sdpFingerprint,
   sha256,
 } from './crypto'
@@ -50,6 +51,7 @@ export async function connect(
       reject(e)
     }
     let agentFp = ''
+    let verdict: ReturnType<typeof pinCheck> = 'refuse'
     let nB = ''
 
     ws.onopen = () => send({ type: 'auth', token })
@@ -69,7 +71,8 @@ export async function connect(
         // Before a single byte goes to the agent: an unexpected certificate means
         // someone (possibly r8er's own server) is in the middle. Pairing again is
         // allowed: the comparison code authenticates the new certificate.
-        if (pin && pin !== agentFp && !onCode)
+        verdict = pinCheck(pin, agentFp, !!onCode)
+        if (verdict === 'refuse')
           return fail(
             new PinMismatch(
               `agent certificate changed: pinned ${pin}, got ${agentFp}`,
@@ -98,13 +101,21 @@ export async function connect(
             key.privateKey,
             authMessage(agentFp, browserFp, m.n!),
           )
-          return say({ type: 'auth', spki: b64(key.spki), sig: b64(sig) })
+          // No matching pin (new browser, or the agent's cert changed): ask for
+          // the code comparison even if the agent knows our key — "ok" alone
+          // can't vouch for a certificate we haven't verified.
+          return say({
+            type: 'auth',
+            spki: b64(key.spki),
+            sig: b64(sig),
+            pair: verdict !== 'pinned',
+          })
         }
         case 'ok':
-          if (!pin)
+          if (verdict !== 'pinned')
             return fail(
-              new Error(
-                'the agent knows this browser but it has no pin: remove it on the agent page and pair again',
+              new PinMismatch(
+                'agent skipped pairing for an unpinned certificate',
               ),
             )
           ch.onclose = null
