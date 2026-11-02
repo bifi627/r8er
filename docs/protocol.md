@@ -1,10 +1,9 @@
 # r8er signaling protocol
 
-Contract-first (per CLAUDE.md). MVP sections first (onboarding, broker,
-pairing), then the Phase-0 POC seed that item 5 deletes. Codegen (C#/Go/TS
-from one schema) is deferred until the protocol stabilizes; for now messages are
-hand-mirrored in Go (`gateway/internal/{onboarding,sessions,pairing,tunnel}`), C#
-(`Features/Broker`) and TS (`frontend/src/features/pairing`).
+Contract-first (per CLAUDE.md): onboarding, broker, pairing, tunnel. Codegen
+(C#/Go/TS from one schema) is deferred until the protocol stabilizes; for now
+messages are hand-mirrored in Go (`gateway/internal/{onboarding,sessions,pairing,tunnel}`),
+C# (`Features/Broker`) and TS (`frontend/src/features/pairing`, `frontend/src/tunnel.ts`).
 
 ## Gateway onboarding (MVP item 2)
 
@@ -98,86 +97,90 @@ code(gatewayFp, keyFp, nA="11"×32, nB="22"×32) = 138781
 
 Once authorized, tunnel requests use the framing below, one channel each.
 
-# POC (Phase 0) — deleted by item 5
+## Tunnel framing (MVP item 5)
 
-## Transport
-
-A peer opens a WebSocket to `/signaling/{room}`. The relay forwards every frame
-verbatim to the *other* peer in the room (max two peers). It never inspects
-payloads. Rendezvous is by shared `room` id, agreed out-of-band (hardcoded
-`poc` for the POC).
-
-## Message envelope
-
-One JSON object per WebSocket text frame:
-
-```json
-{ "type": "offer" | "answer" | "ice", "sdp": <SessionDescription>, "candidate": <ICECandidateInit> }
-```
-
-| `type`   | carries      | direction        |
-|----------|--------------|------------------|
-| `offer`  | `sdp`        | browser → gateway  |
-| `answer` | `sdp`        | gateway → browser  |
-| `ice`    | `candidate`  | both (trickle)   |
-
-- `sdp` is the WebRTC `RTCSessionDescription` (`{type, sdp}`), present only on `offer`/`answer`.
-- `candidate` is `RTCIceCandidateInit` (`{candidate, sdpMid, sdpMLineIndex, ...}`), present only on `ice`. Candidates trickle as they are gathered; end-of-candidates (a null candidate) is not signaled — POC lets gathering finish naturally.
-
-## POC roles
-
-The **browser is the offerer** and creates the data channel; the **gateway is the
-answerer**. The gateway must be in the room first (it is the long-lived peer). No
-auth, no tenancy — MVP promotes both the relay and this envelope into the
-tenant-isolated broker.
-
-## Tunnel framing (POC step 4)
-
-Once the PeerConnection is up, the browser tunnels HTTP over data channels.
-**One data channel per request** — the channel *is* the request/response
-lifecycle, so there are no request IDs, no length prefixes, and no multiplexing
-(and no head-of-line blocking between requests). The gateway dispatches inbound
-channels by label: `throughput` → flood benchmark (step 3); anything else → a
-tunnel request.
+The browser tunnels HTTP to the gateway's local Jellyfin over data channels.
+**One data channel per request**: the channel *is* the request/response
+lifecycle. There are no request IDs, no length prefixes and no multiplexing, so
+there's no head-of-line blocking between requests. Any channel label other than
+`auth` is a tunnel request.
 
 Sequence on a request channel:
 
 1. **Browser → gateway** (one text frame): the request.
    ```json
-   { "method": "GET", "url": "/web/index.html", "headers": { "Range": "bytes=0-99" } }
+   { "method": "GET", "url": "/Items?parentId=…", "headers": { "Range": "bytes=0-99" }, "body": "{…}" }
    ```
-   `url` is origin-relative; the gateway prepends its configured origin
-   (`R8ER_ORIGIN`, default local Jellyfin `http://localhost:8096`). Headers are
-   forwarded verbatim — **`Range` must survive intact or seek breaks.**
+   `url` is origin-relative. `body` is optional, a UTF-8 string of at most
+   64 KB (small JSON for `POST`; `Content-Type` defaults to `application/json`).
+   Headers are forwarded, except credentials (below). **`Range` must survive
+   intact or seek breaks.**
 2. **Gateway → browser** (one text frame): the response head.
    ```json
    { "status": 206, "headers": { "Content-Range": "bytes 0-99/9723", "...": "..." } }
    ```
-3. **Gateway → browser** (zero or more binary frames): the body, in ~16KB chunks
-   under `bufferedAmount` backpressure (never a whole segment in one message).
-4. **Gateway closes the channel** — close is the body's **EOF** marker.
+   A refused request gets a head only: `403` (not allowlisted), `413` (body too
+   large), `503` (gateway has no Jellyfin key), `502` (Jellyfin unreachable).
+3. **Gateway → browser** (zero or more binary frames): the body, in ~16 KB
+   chunks under `bufferedAmount` backpressure. A whole segment is never sent
+   as one message.
+4. **Gateway closes the channel.** Close is the body's **EOF** marker.
 
-Frames are told apart by type: the head is a **text** frame, body chunks are
-**binary**. POC tunnels body-less GETs only (playlists, segments, ranged reads).
+The head is a **text** frame and body chunks are **binary**, so the browser
+tells them apart by type.
 
-**The tunnel is byte-transparent.** The gateway forwards request headers verbatim
-and relays the origin's response body unchanged — it does **not** negotiate or
-apply content compression on the browser's behalf (Go's default transport would
-inject `Accept-Encoding: gzip` and silently decompress, rewriting the body and
-dropping `Content-Length`). Compression stays end-to-end: if the browser sends
-`Accept-Encoding: gzip`, it is forwarded, the origin gzips, and the gzipped
-bytes + `Content-Encoding` reach the browser to decompress. Media segments are
-already compressed, so this costs nothing that matters.
+**Media bytes are untouched.** The gateway never negotiates or applies
+content compression for the browser. Go's default transport would inject
+`Accept-Encoding: gzip` and silently decompress, which rewrites the body and
+drops `Content-Length`. Compression stays end-to-end. The one rewrite is
+key redaction in text responses (below).
+
+### Jellyfin policy (gateway, `gateway/internal/tunnel/jellyfin.go`)
+
+The browser authenticates to r8er, never to Jellyfin, and a paired browser
+stays a *viewer*:
+
+- **Credential injection.** The gateway holds the Jellyfin API key
+  (`R8ER_JELLYFIN_API_KEY`) and sets `Authorization: MediaBrowser Token="…"`.
+  It drops browser-sent `Authorization`, `Cookie`, `X-Emby-*` and
+  `X-MediaBrowser-*` headers, and `api_key`/`ApiKey` query parameters.
+- **User pinning.** Every request gets `userId=<household user>`, and any
+  browser-sent `userId` is dropped. The household user is
+  `R8ER_JELLYFIN_USER` (a name), or the only Jellyfin user if there is one;
+  it's resolved lazily and cached. Tenant = household = one Jellyfin user.
+- **Allowlist.** An API key is admin, so only these pass (anything else is `403`):
+
+  | method | path |
+  |---|---|
+  | GET | `/System/Info/Public` |
+  | GET | `/UserViews`, `/Items`, `/UserItems/Resume`, `/Items/{id}` |
+  | GET | `/Shows/{id}/Seasons`, `/Shows/{id}/Episodes` |
+  | GET | `/Items/{id}/Images/{type}[/{index}]` |
+  | GET | `/Videos/{id}/…` (HLS playlists, segments, subtitles) |
+  | POST | `/Items/{id}/PlaybackInfo` |
+  | POST | `/UserItems/{id}/UserData` (resume position, played) |
+
+  The path must already be clean: no `..`, no `//`, no percent-encoding, not
+  absolute. `{id}` is 32–36 hex digits or dashes.
+- **Redaction.** Jellyfin writes `ApiKey=<key>` into the URLs inside its HLS
+  playlists. Text responses (`json`, `mpegurl`, `text/*`, at most 16 MB) are
+  buffered, the key is replaced with `redacted`, and `Content-Length` is
+  recomputed. The follow-up request then carries `ApiKey=redacted`, which the
+  gateway strips like any other browser-sent key.
+
+Resume goes through `UserData` (`PlaybackPositionTicks`). Jellyfin ignores
+`/Sessions/Playing*` reports from API-key callers, so those aren't allowlisted.
 
 ### Browser mechanism: hls.js custom loader, not a Service Worker (decided)
 
-Both were on the table (feasibility doc; handover notes). **Pick: hls.js custom
-loader**, for the POC and MVP browser client. Playback is Jellyfin **HLS**
-anyway, so a custom fragment/playlist loader reads straight from the data
-channel in **page context** — where the channel handle already lives. A Service
-Worker would add a `postMessage` hop (the channel can't live in the SW), needs
-register+activate before it controls the page, and can be killed mid-stream. A
-SW only earns its keep to transparently proxy *arbitrary* Jellyfin API traffic
-behind a real URL (e.g. iOS native-HLS, which needs a URL) — deferred until a
-concrete need appears. The `tunnelFetch` primitive in `dev/tunnel.html` is the
-page-context transport the loader will wrap in step 5.
+Playback is Jellyfin **HLS**, so a custom hls.js loader
+(`frontend/src/features/library/loader.ts`) reads straight from the data
+channel in **page context**, where the channel handle already lives. A Service
+Worker would add a `postMessage` hop (the channel can't live in the SW). It
+would also need register+activate before it controls the page, and it can be
+killed mid-stream. A SW only earns its keep to put arbitrary Jellyfin traffic
+behind a real URL (e.g. iOS native HLS, which needs a URL), so it's deferred
+until a concrete need appears. The master playlist is loaded from a sentinel
+origin (`https://jellyfin.tunnel`) that can never be fetched directly. The
+loader strips it back to an origin-relative path, so nothing bypasses the
+tunnel. Posters go through the tunnel too, as blob URLs.

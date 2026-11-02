@@ -10,20 +10,19 @@ using R8er.Api.Features.Broker;
 using R8er.Api.Features.Gateways;
 using R8er.Api.Features.Me;
 using R8er.Api.Features.Onboarding;
-using R8er.Api.Features.Poc;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // CORS allowlist = the SPA origins (comma-separated CORS_ORIGINS; default = vite dev).
-// wwwroot harness pages are same-origin, the gateway isn't a browser, and WebSockets
-// ignore CORS (/broker/ws authenticates in-band), so only the SPA needs listing.
+// The gateway isn't a browser, and WebSockets ignore CORS (/broker/ws
+// authenticates in-band), so only the SPA needs listing.
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:5173")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(corsOrigins).WithHeaders("Authorization", "Content-Type").AllowAnyMethod()));
 
 // EF Core control-plane store. Key mirrors .env.example (ConnectionStrings__Default);
-// falls back to the local compose Postgres. POC Telemetry.cs shares this string.
+// falls back to the local compose Postgres.
 // User-secrets load via CreateBuilder in Development only, before env vars — so
 // ConnectionStrings__Default in the environment always wins.
 // Railway's Postgres hands out DATABASE_URL in URL form (postgres://u:p@host:port/db),
@@ -91,14 +90,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseWebSockets();
-// Serves the connectivity harness (wwwroot/connect.html) so a phone can load it
-// same-origin over Railway — file:// is desktop-only. POC step 6b.
-app.UseStaticFiles();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 // Vertical slices: one file per use case under Features/<Slice>/, mapped here.
-await PocEndpoints.MapAsync(app, connString);
 GetMe.Map(app);
 ListGateways.Map(app);
 CreateEnrollmentToken.Map(app);

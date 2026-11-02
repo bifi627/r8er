@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { GenericContainer, Wait } from 'testcontainers'
+import { setupJellyfin } from './jellyfin'
 import { freePort, logs, root, start, waitHttp } from './stack'
 
 // Image pins live in docker-compose.yml (one source of truth, never `latest`).
@@ -72,13 +73,33 @@ export default async function globalSetup() {
         os.tmpdir(),
         `r8er-e2e-gateway${process.platform === 'win32' ? '.exe' : ''}`,
       )
-      build('go', ['build', '-o', bin, './cmd/gateway'], path.join(root, 'gateway'))
+      build(
+        'go',
+        ['build', '-o', bin, './cmd/gateway'],
+        path.join(root, 'gateway'),
+      )
       process.env.E2E_GATEWAY_BIN = bin
     })(),
   ])
 
   const emulator = `${firebase.getHost()}:${firebase.getMappedPort(9099)}`
   process.env.E2E_JELLYFIN_URL = `http://${jellyfin.getHost()}:${jellyfin.getMappedPort(8096)}`
+  // Fixture media, made in the container by Jellyfin's own ffmpeg (no host
+  // ffmpeg in CI): a 30 s H.264/AAC clip + sidecar English subtitle, in
+  // Jellyfin's one-folder-per-movie layout.
+  const sh = (cmd: string) =>
+    jellyfin.exec(['sh', '-c', cmd]).then((r) => {
+      if (r.exitCode !== 0) throw new Error(`jellyfin exec: ${r.output}`)
+    })
+  await sh(
+    'D="/media/r8er e2e clip" && mkdir -p "$D" && /usr/lib/jellyfin-ffmpeg/ffmpeg -loglevel error -y ' +
+      '-f lavfi -i testsrc=duration=30:size=640x360:rate=30 -f lavfi -i sine=frequency=440:duration=30 ' +
+      '-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -metadata title="r8er e2e clip" "$D/r8er e2e clip.mp4" && ' +
+      `printf '1\n00:00:00,000 --> 00:00:30,000\nr8er e2e subtitle\n' > "$D/r8er e2e clip.en.srt"`,
+  )
+  process.env.E2E_JELLYFIN_API_KEY = await setupJellyfin(
+    process.env.E2E_JELLYFIN_URL,
+  )
 
   const apiPort = await freePort()
   const api = `http://127.0.0.1:${apiPort}`

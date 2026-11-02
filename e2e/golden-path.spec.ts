@@ -1,6 +1,6 @@
 // THE golden path (dev-env spec: exactly one E2E; edge cases belong in the
-// integration layer). Real browser → broker → gateway → Jellyfin. Item 5 extends
-// this same story with media → browse → play → seek.
+// integration layer). Real browser → broker → gateway → Jellyfin: onboard, pair,
+// browse, play, resume, re-pair, remove.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -21,6 +21,11 @@ async function signIn(browser: Browser, create = false) {
   await expect(page.getByRole('heading', { name: 'Gateways' })).toBeVisible()
   return page
 }
+
+const videoTime = (p: Page) =>
+  p
+    .locator('video')
+    .evaluate((v: HTMLVideoElement) => (v.readyState >= 2 ? v.currentTime : -1))
 
 const tunnelOk = (p: Page) =>
   expect(p.getByText('Tunnel OK · HTTP 200')).toBeVisible()
@@ -51,7 +56,7 @@ test('onboard gateway, pair, pin, re-pair after cert swap, remove', async ({
   const env = Object.fromEntries(
     [...cmd.matchAll(/(R8ER_\w+)=(\S+)/g)].map((m) => [m[1], m[2]]),
   )
-  // Without an API URL the gateway falls back to POC mode and dials prod Railway.
+  // The gateway refuses to start without an API URL; it must point at this stack.
   expect(env.R8ER_API_URL).toMatch(/^http:\/\/127\.0\.0\.1:/)
   let gateway = await startGateway(stateDir, env)
   try {
@@ -60,6 +65,25 @@ test('onboard gateway, pair, pin, re-pair after cert swap, remove', async ({
 
     await test.step('browser A pairs; codes match on both sides', () =>
       pair(a, gatewayPage, gateway.pageUrl))
+
+    await test.step('browse → play through the tunnel → resume', async () => {
+      await a.getByRole('button', { name: 'Open' }).click()
+      await a.getByRole('button', { name: /Movies/ }).click()
+      await a.getByRole('button', { name: /r8er e2e clip/ }).click()
+      await expect(a.getByLabel('Subtitles')).toBeVisible() // sidecar .srt → HLS rendition
+      await expect
+        .poll(() => videoTime(a), { timeout: 30_000 })
+        .toBeGreaterThan(3)
+      await a.getByRole('button', { name: 'Back' }).click() // saves the position
+      await a.reload()
+      await a.getByRole('button', { name: 'Open' }).click()
+      const resume = a.getByRole('button', {
+        name: /r8er e2e clip.*Resume 0:0[3-9]/,
+      })
+      await resume.click() // "Continue watching" row
+      await expect.poll(() => videoTime(a)).toBeGreaterThan(2.5) // starts there, not at 0
+      await a.getByRole('button', { name: '← Gateways' }).click()
+    })
 
     await test.step('pin + key survive a reload (IndexedDB)', async () => {
       await a.reload()

@@ -56,9 +56,11 @@ export async function connect(
 
     ws.onopen = () => send({ type: 'auth', token })
     ws.onclose = () => fail(new Error('broker connection closed'))
-    // Handle broker messages strictly in order: an ICE candidate must not race
-    // ahead of the answer's setRemoteDescription.
+    // Handle broker messages strictly in order. The gateway can still trickle a
+    // candidate before its answer (Pion gathers during SetLocalDescription), so
+    // candidates that beat the answer wait in `early`.
     let queue = Promise.resolve()
+    const early: RTCIceCandidateInit[] = []
     ws.onmessage = (e) => {
       queue = queue.then(() => onBroker(JSON.parse(e.data))).catch(fail)
     }
@@ -79,8 +81,10 @@ export async function connect(
             ),
           )
         await pc.setRemoteDescription(m.sdp)
+        for (const c of early.splice(0)) await pc.addIceCandidate(c)
       } else if (m.type === 'ice') {
-        await pc.addIceCandidate(m.candidate)
+        if (pc.remoteDescription) await pc.addIceCandidate(m.candidate)
+        else early.push(m.candidate)
       } else if (m.type === 'error') {
         fail(new Error(m.error))
       }
@@ -142,26 +146,6 @@ export async function connect(
           return fail(new Error(`gateway refused: ${m.reason ?? 'rejected'}`))
       }
     }
-  })
-}
-
-/** Tunnel framing (docs/protocol.md): one data channel per request. */
-export function tunnelFetch(pc: RTCPeerConnection, url: string) {
-  return new Promise<{ status: number; body: Blob }>((resolve, reject) => {
-    const dc = pc.createDataChannel(`req:${url}`)
-    dc.binaryType = 'arraybuffer'
-    let status = 0
-    const chunks: ArrayBuffer[] = []
-    dc.onopen = () =>
-      dc.send(JSON.stringify({ method: 'GET', url, headers: {} }))
-    dc.onmessage = (e) => {
-      if (typeof e.data === 'string') status = JSON.parse(e.data).status
-      else chunks.push(e.data)
-    }
-    dc.onclose = () =>
-      status
-        ? resolve({ status, body: new Blob(chunks) })
-        : reject(new Error('tunnel refused'))
   })
 }
 

@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -32,11 +31,10 @@ type Msg struct {
 }
 
 type Sessions struct {
-	Cert   *webrtc.Certificate
-	Fp     string // our DTLS fingerprint
-	Store  *pairing.Store
-	Client *http.Client
-	Origin string // tunnel origin (local Jellyfin)
+	Cert     *webrtc.Certificate
+	Fp       string // our DTLS fingerprint
+	Store    *pairing.Store
+	Jellyfin *tunnel.Jellyfin // the tunnel's origin + policy
 
 	mu  sync.Mutex
 	pcs map[string]*webrtc.PeerConnection
@@ -115,7 +113,7 @@ func (s *Sessions) newPeer(id string, send func(any)) (*webrtc.PeerConnection, e
 		case d.Label() == "auth":
 			s.serveAuth(pc, d, &authed)
 		case authed.Load():
-			tunnel.Serve(d, s.Client, s.Origin)
+			tunnel.Serve(d, s.Jellyfin)
 		default:
 			d.OnOpen(func() { d.Close() }) // not paired: nothing but `auth`
 		}
@@ -226,9 +224,8 @@ func answer(pc *webrtc.PeerConnection, offer webrtc.SessionDescription, id strin
 	return nil
 }
 
-// iceServers: Google STUN plus optional TURN from env (same knobs as the POC:
-// R8ER_ICE_URLS, R8ER_ICE_USERNAME, R8ER_ICE_CREDENTIAL). ponytail: duplicated
-// from internal/poc, which item 5 deletes.
+// iceServers: Google STUN plus optional TURN from env (R8ER_ICE_URLS,
+// R8ER_ICE_USERNAME, R8ER_ICE_CREDENTIAL).
 func iceServers() []webrtc.ICEServer {
 	servers := []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}}
 	if urls := os.Getenv("R8ER_ICE_URLS"); urls != "" {

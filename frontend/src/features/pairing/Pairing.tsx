@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { connect, PinMismatch, tunnelFetch } from './connect'
+import { connect, PinMismatch } from './connect'
+import { tunnelFetch } from '../../tunnel'
 
 // Pair this browser with an online gateway (flow 2), or open a pinned connection
-// and tunnel one request through it — the item-3 done check. The real player
-// replaces "Test connection" in item 5.
+// and tunnel one request through it ("Test connection": a cheap diagnostic).
 export function Pairing({
   gatewayId,
   lanUrl,
@@ -25,7 +25,7 @@ export function Pairing({
       setStatus('Connected · tunneling GET /System/Info/Public…')
       const r = await tunnelFetch(s.pc, '/System/Info/Public')
       setStatus(
-        `Tunnel OK · HTTP ${r.status} · ${(await r.body.text()).slice(0, 120)}`,
+        `Tunnel OK · HTTP ${r.status} · ${new TextDecoder().decode(r.body).slice(0, 120)}`,
       )
       s.close()
     } catch (e) {

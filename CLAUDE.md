@@ -25,8 +25,8 @@ removed, or changed (new env secret, new image, new cloud service).
 to MVP as designed).** Proven end-to-end: cellular→home connectivity (86%
 direct, cellular 100%), TURN fallback, 1080p+subtitles, seek, HEVC transcode
 and remux over the tunnel, 4K feasible via ABR. Full record + criteria mapping:
-`docs/poc-connectivity-spike.md`. POC code is throwaway (hardcoded room `poc`,
-no auth/tenancy) — MVP rewrites it safely. Carried into MVP (non-blocking): iOS
+`docs/poc-connectivity-spike.md`. POC code (hardcoded room `poc`, no
+auth/tenancy) was deleted in item 5 PR A; git holds it. Carried into MVP (non-blocking): iOS
 Safari device test, codec census over real libraries, Jellyfin NAS footprint +
 GPLv2 check. **Next work: Phase 1 MVP, build order in the implementation plan**
 (control plane → gateway pairing with fingerprint pinning → tenant-isolated
@@ -48,9 +48,18 @@ local gateway page (Host/Origin guard), Gateways list. **PR B (broker + pairing)
 tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto client key,
 session-bound connection auth, commit/reveal comparison code approved on the gateway
 page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
-**Next: item 5** (streaming client, consumption-only — no Jellyfin management). Item 4 (productized gateway: compose
-install, auto-update, status page) deferred 2026-11-02 — dev runs the Go binary
-directly; pick it up before the first non-owner install.
+Item 4 (productized gateway: compose install, auto-update, status page) deferred
+2026-11-02 — dev runs the Go binary directly; pick it up before the first
+non-owner install.
+
+**Item 5 — streaming client** (design: `docs/superpowers/specs/2026-11-02-r8er-streaming-client-design.md`;
+consumption-only, functional UI). **PR A (watch it):** Gateways → Open → library /
+series / episodes → hls.js player over the tunnel (custom loader), subtitles, resume
+via Jellyfin UserData. The gateway owns the Jellyfin API key (`R8ER_JELLYFIN_API_KEY`;
+dev: `scripts/setup-jellyfin.sh`): it injects the key, pins the household user, lets
+only an endpoint allowlist through, and redacts the key from playlists. All POC
+paths are deleted. **Next: PR B (trust it)** — `/turn` + client TURN,
+`connection_sessions` telemetry (migration #4), privacy indicator.
 
 **Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
 tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was

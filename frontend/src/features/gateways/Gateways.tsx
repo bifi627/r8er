@@ -6,6 +6,7 @@ import {
   type Install,
 } from './api'
 import { Pairing } from '../pairing/Pairing'
+import { Library } from '../library/Library'
 
 // Gateways list + "Add gateway" (onboarding flow 1). Polls so a freshly installed
 // gateway shows up, and online/offline stays current. ponytail: 5s poll, push
@@ -14,6 +15,7 @@ export function Gateways() {
   const [gateways, setGateways] = useState<Gateway[]>([])
   const [install, setInstall] = useState<Install | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [opened, setOpened] = useState<string | null>(null)
 
   useEffect(() => {
     const load = () =>
@@ -36,6 +38,9 @@ export function Gateways() {
     }
   }
 
+  if (opened)
+    return <Library gatewayId={opened} onClose={() => setOpened(null)} />
+
   return (
     <section>
       <h2>Gateways</h2>
@@ -57,7 +62,15 @@ export function Gateways() {
                   </a>
                 </>
               )}
-              {d.online && <Pairing gatewayId={d.id} lanUrl={d.lanUrl} />}
+              {d.online && (
+                <>
+                  {' · '}
+                  <button type="button" onClick={() => setOpened(d.id)}>
+                    Open
+                  </button>
+                  <Pairing gatewayId={d.id} lanUrl={d.lanUrl} />
+                </>
+              )}
             </li>
           ))}
         </ul>

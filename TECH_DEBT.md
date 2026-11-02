@@ -13,24 +13,17 @@ Emulator error-body parsing assumes an `error` JSON shape; a real HTTP failure
 
 **Pay down:** next time the token minter is touched, or if a test fails with a confusing parse error.
 
-### POC telemetry sink is raw Npgsql
-**Area:** control-plane / Features/Poc/Telemetry.cs
+### No connection telemetry between item 5 PR A and PR B
+**Area:** control-plane / telemetry
 
-POC connectivity table is raw Npgsql, no EF/migrations, hardcoded — throwaway
-spike sink. Was to graduate to a tenant-scoped EF entity in PR B; deferred: the
-pinned session only tunnels a test request today, so there is no real stream to
-measure yet.
+PR A deleted the POC sink (`Features/Poc/Telemetry.cs`, raw Npgsql) with the
+harness pages that were its only producer. Until PR B adds the tenant-scoped
+`connection_sessions` table, real streams log nothing. That breaks the
+"connection telemetry is a deliverable" rule. The POC table and its
+Checkpoint-1 rows stay in Railway Postgres untouched (code deletion drops
+nothing).
 
-**Pay down:** item 5 (streaming client), with the player as producer; deleted in that PR.
-
-### POC paths still live
-**Area:** POC paths
-
-`/signaling/{room}`, `gateway/internal/poc` (+ POC mode in `main.go`),
-`wwwroot/{play,connect}.html`, `dev/*.html` stay so streaming never regresses
-before the real client. Unauthenticated relay, no tenant data.
-
-**Pay down:** item 5 replaces and deletes them.
+**Pay down:** item 5 PR B (next PR), which also drops the POC table once its rows are archived.
 
 ### Broker registry is in-memory
 **Area:** control-plane / Features/Broker

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Reproducible dev Jellyfin setup for POC step 5 (playback through the tunnel).
-# Wipes the throwaway Jellyfin config, re-runs the startup wizard via the REST
-# API with known dev creds, adds the dev-media library, scans it, mints an API
-# key, and prints a ready-to-play HLS URL for the 10-minute seek clip.
+# Reproducible dev Jellyfin setup. Wipes the throwaway Jellyfin config, re-runs
+# the startup wizard via the REST API with known dev creds, adds the dev-media
+# library, scans it, mints an API key, and prints the gateway env to use it.
 #
 # ponytail: throwaway dev tooling — hardcoded creds, no error recovery beyond
-# "fail loud". Not product code; the gateway owns the real Jellyfin key in MVP.
+# "fail loud". Not product code (a real install creates the key in the
+# Jellyfin dashboard until item 4 automates it).
 #
 #   bash scripts/setup-jellyfin.sh
 #
@@ -100,15 +100,6 @@ echo "  1080p+subs: ${P1080_ID:-<none — run gen-test-media.sh then re-run>} (s
 echo "  hevc+ac3:   ${HEVC_ID:-<none — run gen-test-media.sh then re-run>} (forces transcode)"
 echo "  wrote:      $OUT"
 echo
-echo "HLS URL to play through the tunnel (origin-relative):"
-echo "  /Videos/$ITEM_ID/master.m3u8?mediaSourceId=$ITEM_ID&deviceId=r8er-poc&ApiKey=$API_KEY&videoCodec=h264&audioCodec=aac"
-if [ -n "$P1080_ID" ]; then
-  echo
-  echo "Phone play URL (1080p + subs over the away path) — open on the phone:"
-  echo "  https://r8er.up.railway.app/play.html#item=$P1080_ID&key=$API_KEY${SUB_IDX:+&subs=$SUB_IDX}"
-fi
-if [ -n "$HEVC_ID" ]; then
-  echo
-  echo "Phone play URL (step 7a: HEVC->H.264 TRANSCODE @4Mbps over the away path):"
-  echo "  https://r8er.up.railway.app/play.html#item=$HEVC_ID&key=$API_KEY&vb=4000000"
-fi
+echo "Gateway env (the gateway injects this key; browsers never see it):"
+echo "  export R8ER_JELLYFIN_API_KEY=$API_KEY           # bash"
+echo "  \$env:R8ER_JELLYFIN_API_KEY = \"$API_KEY\"   # PowerShell"
