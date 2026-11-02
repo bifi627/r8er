@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +41,15 @@ func fakeJellyfin(t *testing.T, users string) (*Jellyfin, *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, ".m3u8"):
 			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-			w.Write([]byte("#EXTM3U\nstream.vtt?ApiKey=" + key + "\n"))
+			pl := []byte("#EXTM3U\nstream.vtt?ApiKey=" + key + "\n")
+			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") { // like Jellyfin's response compression
+				w.Header().Set("Content-Encoding", "gzip")
+				z := gzip.NewWriter(w)
+				z.Write(pl)
+				z.Close()
+				return
+			}
+			w.Write(pl)
 		default:
 			http.ServeContent(w, r, "x.ts", time.Time{}, bytes.NewReader(payload))
 		}
@@ -121,6 +130,7 @@ func TestCredentialsAndUser(t *testing.T) {
 		URL:    "/Videos/" + vid + "/master.m3u8?api_key=stolen&ApiKey=stolen&UserId=someone-else&mediaSourceId=" + vid,
 		Headers: map[string]string{
 			"Authorization": `MediaBrowser Token="stolen"`, "X-Emby-Token": "stolen", "Cookie": "a=b",
+			"Accept-Encoding": "gzip", // must not stop redact from seeing the key
 		},
 	})
 	if status != 200 {
