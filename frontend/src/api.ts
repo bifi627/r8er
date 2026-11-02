@@ -6,10 +6,13 @@ export async function authed<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await auth.currentUser?.getIdToken()
   const res = await fetch(`${API}${path}`, {
     ...init,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: {
+      ...(init?.body !== undefined && { 'Content-Type': 'application/json' }),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
   })
   if (!res.ok) throw new Error(`${path} → ${res.status}`)
-  return res.json() as Promise<T>
+  return (res.status === 204 ? null : res.json()) as Promise<T>
 }
 
 export const getMe = () =>

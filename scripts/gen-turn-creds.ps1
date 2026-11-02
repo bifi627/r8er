@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
   Mint short-lived Cloudflare Realtime TURN credentials for the gateway, and
-  print the env vars ready to paste. (PR B moves minting into the API.)
+  print the env vars ready to paste. Gateway-only: browsers get their TURN
+  creds from the API's GET /turn.
 
 .DESCRIPTION
   Calls Cloudflare's generate-ice-servers endpoint with your TURN key, saves the

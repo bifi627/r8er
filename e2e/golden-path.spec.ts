@@ -74,6 +74,9 @@ test('onboard gateway, pair, pin, re-pair after cert swap, remove', async ({
       await expect
         .poll(() => videoTime(a), { timeout: 30_000 })
         .toBeGreaterThan(3)
+      await expect(
+        a.getByText(/end-to-end encrypted · direct · r8er carried 0 bytes/),
+      ).toBeVisible() // same host: host candidates, no relay
       await a.getByRole('button', { name: 'Back' }).click() // saves the position
       await a.reload()
       await a.getByRole('button', { name: 'Open' }).click()
@@ -85,8 +88,18 @@ test('onboard gateway, pair, pin, re-pair after cert swap, remove', async ({
       await a.getByRole('button', { name: '← Gateways' }).click()
     })
 
+    await test.step('forced relay (?relay) → tunnel works, indicator says relayed', async () => {
+      await a.goto(`${process.env.E2E_APP_URL}/?relay`)
+      await a.getByRole('button', { name: 'Open' }).click()
+      await expect(
+        a.getByText(/relayed \(encrypted, r8er cannot decrypt\)/),
+      ).toBeVisible({ timeout: 30_000 })
+      await expect(a.getByRole('button', { name: /Movies/ })).toBeVisible() // a tunnel request made it
+      await a.getByRole('button', { name: '← Gateways' }).click()
+    })
+
     await test.step('pin + key survive a reload (IndexedDB)', async () => {
-      await a.reload()
+      await a.goto(process.env.E2E_APP_URL!) // drops ?relay
       await a.getByRole('button', { name: 'Test connection' }).click()
       await tunnelOk(a)
     })

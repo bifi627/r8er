@@ -6,6 +6,7 @@ import { connect, PinMismatch, type Session } from '../pairing/connect'
 import { tunnelFetch, tunnelJson } from '../../tunnel'
 import { Player } from './Player'
 import { clock, TICKS_PER_SECOND, type Item } from './items'
+import { pairInfo, type PairInfo } from '../../stats'
 
 type Page = { Items: Item[] }
 type View =
@@ -79,6 +80,7 @@ export function Library({
       </p>
       {err && <p style={{ color: 'crimson' }}>{err}</p>}
       {!session && !err && <p>Connecting…</p>}
+      {session && <Privacy pc={session.pc} />}
       {session && playing && (
         <Player
           pc={session.pc}
@@ -171,6 +173,34 @@ function Listing({
           ),
       )}
     </>
+  )
+}
+
+// Privacy indicator: what r8er can see of this stream, from the live selected
+// candidate pair. Either way the tunnel is DTLS end to end (pinned both ways).
+function Privacy({ pc }: { pc: RTCPeerConnection }) {
+  const [p, setP] = useState<PairInfo | null>(null)
+  useEffect(() => {
+    const poll = () =>
+      pc.getStats().then(
+        (s) => setP(pairInfo(s)),
+        () => {},
+      )
+    poll()
+    const t = setInterval(poll, 2000)
+    return () => clearInterval(t)
+  }, [pc])
+  if (!p) return null
+  const mb = ((p.bytesReceived + p.bytesSent) / 1e6).toFixed(1)
+  return (
+    <p>
+      <small>
+        🔒{' '}
+        {p.relay
+          ? `relayed (encrypted, r8er cannot decrypt) · ${mb} MB relayed`
+          : 'end-to-end encrypted · direct · r8er carried 0 bytes'}
+      </small>
+    </p>
   )
 }
 

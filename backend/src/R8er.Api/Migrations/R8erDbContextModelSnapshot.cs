@@ -53,6 +53,59 @@ namespace R8er.Api.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("R8er.Api.Data.ConnectionSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("BytesReceived")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("BytesSent")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Failure")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("GatewayId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Ipv6")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LocalCandidateType")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Protocol")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Relay")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RemoteCandidateType")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GatewayId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("connection_sessions", (string)null);
+                });
+
             modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -147,6 +200,21 @@ namespace R8er.Api.Migrations
 
             modelBuilder.Entity("R8er.Api.Data.AppUser", b =>
                 {
+                    b.HasOne("R8er.Api.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("R8er.Api.Data.ConnectionSession", b =>
+                {
+                    b.HasOne("R8er.Api.Data.Gateway", null)
+                        .WithMany()
+                        .HasForeignKey("GatewayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("R8er.Api.Data.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

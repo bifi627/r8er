@@ -15,6 +15,7 @@ const pin = (name: string) =>
 
 export default async function globalSetup() {
   fs.rmSync(logs, { recursive: true, force: true })
+  fs.mkdirSync(logs, { recursive: true })
   const build = (cmd: string, args: string[], cwd: string) =>
     execFileSync(cmd, args, { cwd, stdio: 'inherit' })
 
@@ -23,7 +24,18 @@ export default async function globalSetup() {
     path.join(root, 'dev', 'firebase'),
   ).build('r8er-firebase-emulator:e2e', { deleteOnExit: false })
 
-  const [pg, firebase, jellyfin] = await Promise.all([
+  // TURN for the forced-relay step. Fixed host ports: coturn advertises
+  // 127.0.0.1 (--external-ip), so host and container ports must match. Offset
+  // from compose's coturn (3478, 49160+) so a dev relay stack can keep running.
+  const turnPort = 3479
+  const relayPorts = [49210, 49211, 49212, 49213, 49214]
+  const fixed = (port: number, protocol: 'tcp' | 'udp') => ({
+    container: port,
+    host: port,
+    protocol,
+  })
+
+  const [pg, firebase, jellyfin, coturn] = await Promise.all([
     new GenericContainer(pin('postgres'))
       .withEnvironment({
         POSTGRES_USER: 'r8er',
@@ -61,6 +73,41 @@ export default async function globalSetup() {
         Wait.forHttp('/System/Info/Public', 8096).forStatusCode(200),
       )
       .withStartupTimeout(180_000)
+      .start(),
+    new GenericContainer(pin('coturn/coturn'))
+      .withCommand([
+        'turnserver',
+        '-n',
+        '--lt-cred-mech',
+        '--user',
+        'e2e:e2e',
+        '--realm',
+        'r8er.e2e',
+        '--listening-port',
+        String(turnPort),
+        '--min-port',
+        String(relayPorts[0]),
+        '--max-port',
+        String(relayPorts.at(-1)),
+        '--external-ip=127.0.0.1',
+        '--verbose',
+      ])
+      .withExposedPorts(
+        fixed(turnPort, 'tcp'),
+        fixed(turnPort, 'udp'),
+        ...relayPorts.map((p) => fixed(p, 'udp')),
+      )
+      .withLogConsumer((stream) =>
+        stream.pipe(fs.createWriteStream(path.join(logs, 'coturn.log'))),
+      )
+      // Ready = TCP listener up (3479 = 0x0D97). Not a log line: coturn
+      // block-buffers stdout without a TTY, so its log arrives in 4 KB chunks.
+      .withHealthCheck({
+        test: ['CMD-SHELL', `grep -q ':0D97 ' /proc/net/tcp`],
+        interval: 500, // ms
+        retries: 60,
+      })
+      .withWaitStrategy(Wait.forHealthCheck())
       .start(),
     // Build while the containers boot.
     (async () => {
@@ -120,6 +167,10 @@ export default async function globalSetup() {
         FIREBASE_AUTH_EMULATOR_HOST: emulator,
         FIREBASE_PROJECT_ID: 'demo-r8er',
         CORS_ORIGINS: process.env.E2E_APP_URL,
+        // /turn hands these out (dev path; prod mints Cloudflare creds).
+        R8ER_TURN_URLS: `turn:127.0.0.1:${turnPort}?transport=udp`,
+        R8ER_TURN_USERNAME: 'e2e',
+        R8ER_TURN_CREDENTIAL: 'e2e',
       },
     },
   )
@@ -152,6 +203,11 @@ export default async function globalSetup() {
   return async () => {
     await Promise.all([backend.stop(), vite.stop()])
     // Ryuk reaps the containers even if this never runs (crash, Ctrl+C).
-    await Promise.all([pg.stop(), firebase.stop(), jellyfin.stop()])
+    await Promise.all([
+      pg.stop(),
+      firebase.stop(),
+      jellyfin.stop(),
+      coturn.stop(),
+    ])
   }
 }

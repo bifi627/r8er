@@ -56,6 +56,30 @@ Closing it ends the session (broker sends the gateway `bye`).
 into a session opened *for that gateway*. The gateway keeps one PeerConnection
 per session (several browsers at once).
 
+## ICE servers + connection telemetry (MVP item 5)
+
+**`GET /turn`** (Firebase Bearer) → `{iceServers}` for the browser's
+`RTCPeerConnection`. Prod: Cloudflare `generate-ice-servers` (1 h TTL), passed
+through. Dev: `R8ER_TURN_URLS` / `_USERNAME` / `_CREDENTIAL` (compose coturn),
+else STUN only. If `/turn` fails the browser falls back to STUN. `?relay` in the
+app URL sets `iceTransportPolicy: "relay"` (diagnostic; the e2e uses it). The
+gateway stays on its own config (STUN, optional `R8ER_ICE_*`): the browser's
+relay candidate is enough, as the e2e's forced-relay step shows.
+
+**Telemetry**: once the tunnel is up the browser reads the selected candidate
+pair from `getStats()` and calls `POST /connections`
+`{gatewayId, relay, ipv6, localCandidateType, remoteCandidateType, protocol}` →
+`{id}`; on close, `PATCH /connections/{id}` `{bytesReceived, bytesSent}` (stamps
+`EndedAt`). Rows live in `connection_sessions` (tenant-owned, global filter;
+another tenant's gateway or row → `404`). A closed tab skips the PATCH.
+A failed attempt (ICE `failed`, pin mismatch, unpaired, broker or gateway
+closed, refused) posts `{gatewayId, failure}` instead: candidate fields null,
+`failure` = the reason (≤ 64 chars). Rate queries: `failure IS NULL` = up.
+`relay` = either selected candidate is a relay. Chrome can report a relayed
+local candidate as `prflx`; only relay candidates carry `relayProtocol`, so
+that counts too. The same reading drives the player's privacy indicator
+(polled every 2 s).
+
 ## Pairing + connection auth (MVP item 3)
 
 Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`. Browser

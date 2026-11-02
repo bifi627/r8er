@@ -7,9 +7,11 @@ using R8er.Api;
 using R8er.Api.Auth;
 using R8er.Api.Data;
 using R8er.Api.Features.Broker;
+using R8er.Api.Features.Connections;
 using R8er.Api.Features.Gateways;
 using R8er.Api.Features.Me;
 using R8er.Api.Features.Onboarding;
+using R8er.Api.Features.Turn;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,6 +70,7 @@ builder.Services.AddScoped<UserProvisioner>();
 builder.Services.AddAuthentication("Firebase")
     .AddScheme<AuthenticationSchemeOptions, FirebaseAuthHandler>("Firebase", _ => { });
 builder.Services.AddAuthorization();
+builder.Services.AddHttpClient(); // /turn -> Cloudflare
 
 // Railway (and any container host) inject the port via $PORT. ponytail:
 // one-line bind; no-op locally where launchSettings sets the URL.
@@ -100,6 +103,9 @@ CreateEnrollmentToken.Map(app);
 Enroll.Map(app);
 GatewaySocket.Map(app);
 BrowserSocket.Map(app);
+GetTurn.Map(app);
+StartConnection.Map(app);
+EndConnection.Map(app);
 
 app.Run();
 
