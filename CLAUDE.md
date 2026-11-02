@@ -49,7 +49,7 @@ tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto device k
 session-bound connection auth, commit/reveal comparison code approved on the agent
 page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
 **Next: item 4** (productized agent). Naming rename agent→server / device→client
-is queued as TECH_DEBT T9.
+is queued in TECH_DEBT.md ("Rename agent/device → server/client").
 
 ## Stack & layout
 
