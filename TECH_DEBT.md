@@ -13,18 +13,6 @@ Emulator error-body parsing assumes an `error` JSON shape; a real HTTP failure
 
 **Pay down:** next time the token minter is touched, or if a test fails with a confusing parse error.
 
-### No connection telemetry between item 5 PR A and PR B
-**Area:** control-plane / telemetry
-
-PR A deleted the POC sink (`Features/Poc/Telemetry.cs`, raw Npgsql) with the
-harness pages that were its only producer. Until PR B adds the tenant-scoped
-`connection_sessions` table, real streams log nothing. That breaks the
-"connection telemetry is a deliverable" rule. The POC table and its
-Checkpoint-1 rows stay in Railway Postgres untouched (code deletion drops
-nothing).
-
-**Pay down:** item 5 PR B (next PR), which also drops the POC table once its rows are archived.
-
 ### Broker registry is in-memory
 **Area:** control-plane / Features/Broker
 

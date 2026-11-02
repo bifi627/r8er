@@ -170,5 +170,6 @@ secrets, B); README/dev notes: create the Jellyfin API key and set
   `/media` as a plain folder; the e2e helper re-triggers `/Library/Refresh`.
 - Poster fan-out over one-channel-per-request: SCTP stream limits (Pion
   default 65535, Chrome caps lower). The in-flight cap covers it.
-- TURN with the browser as offerer and the gateway on STUN only: confirm
-  relay-only sessions connect when the gateway has no TURN config.
+- ~~TURN with the browser as offerer and the gateway on STUN only~~: relay-only
+  sessions connect (e2e forced-relay step). Chrome may report the relayed local
+  candidate as `prflx`; `relayProtocol` gives it away.

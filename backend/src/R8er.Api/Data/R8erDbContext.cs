@@ -12,6 +12,7 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Gateway> Gateways => Set<Gateway>();
     public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
+    public DbSet<ConnectionSession> ConnectionSessions => Set<ConnectionSession>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -42,11 +43,19 @@ public class R8erDbContext(DbContextOptions<R8erDbContext> options) : DbContext(
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
         });
 
+        b.Entity<ConnectionSession>(e =>
+        {
+            e.ToTable("connection_sessions");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
+        });
+
         // DB-level FKs matching the design doc (tenant_id uuid NOT NULL REFERENCES
         // tenants(id)). No navigation properties — entities stay plain scalars.
         b.Entity<AppUser>().HasOne<Tenant>().WithMany().HasForeignKey(u => u.TenantId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Gateway>().HasOne<Tenant>().WithMany().HasForeignKey(d => d.TenantId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EnrollmentToken>().HasOne<Tenant>().WithMany().HasForeignKey(t => t.TenantId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ConnectionSession>().HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ConnectionSession>().HasOne<Gateway>().WithMany().HasForeignKey(c => c.GatewayId).OnDelete(DeleteBehavior.Cascade);
 
         // ONE place: apply the tenant filter to every ITenantOwned entity. A
         // strongly-typed generic lambda referencing the instance property is the

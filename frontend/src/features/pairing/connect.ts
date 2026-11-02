@@ -2,7 +2,8 @@
 // browser's client key, and (when pairing) run commit/reveal for the
 // comparison code. docs/protocol.md, "Broker" + "Pairing".
 import { auth } from '../../firebase'
-import { API } from '../../api'
+import { API, authed } from '../../api'
+import { pairInfo } from '../../stats'
 import {
   authMessage,
   b64,
@@ -29,19 +30,70 @@ export async function connect(
   gatewayId: string,
   onCode?: (code: string) => void,
 ): Promise<Session> {
-  const [key, pin, token] = await Promise.all([
+  const [key, pin, token, ice] = await Promise.all([
     clientKey(),
     getPin(gatewayId),
     auth.currentUser?.getIdToken(),
+    // TURN from the API (short-lived Cloudflare creds in prod). If that fails,
+    // STUN alone still connects most networks.
+    authed<{ iceServers: RTCIceServer[] }>('/turn').catch(() => ({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    })),
   ])
   const ws = new WebSocket(API.replace(/^http/, 'ws') + '/broker/ws')
-  // ponytail: STUN only; TURN credentials for the MVP client arrive with item 6.
   const pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    iceServers: ice.iceServers,
+    // Diagnostic: `?relay` in the app URL forces the TURN path.
+    iceTransportPolicy: new URLSearchParams(location.search).has('relay')
+      ? 'relay'
+      : 'all',
   })
-  const close = () => {
+  // Connection telemetry: one row per session that got a tunnel, totals on
+  // close. ponytail: a closed tab skips the end PATCH (row keeps EndedAt null).
+  let logged: Promise<string | null> | null = null
+  const teardown = () => {
     pc.close()
     ws.close() // the broker tells the gateway `bye`
+  }
+  const close = () => {
+    const row = logged
+    logged = null
+    if (!row) return teardown()
+    void Promise.all([row, pc.getStats()])
+      .then(([id, s]) => {
+        const p = pairInfo(s)
+        if (id && p)
+          return authed(`/connections/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              bytesReceived: p.bytesReceived,
+              bytesSent: p.bytesSent,
+            }),
+          })
+      })
+      .catch(() => {})
+      .finally(teardown)
+  }
+  const up = (): Session => {
+    logged = pc
+      .getStats()
+      .then((s) => {
+        const p = pairInfo(s)
+        if (!p) return null
+        return authed<{ id: string }>('/connections', {
+          method: 'POST',
+          body: JSON.stringify({
+            gatewayId,
+            relay: p.relay,
+            ipv6: p.ipv6,
+            localCandidateType: p.local,
+            remoteCandidateType: p.remote,
+            protocol: p.protocol,
+          }),
+        }).then((r) => r.id)
+      })
+      .catch(() => null)
+    return { pc, close }
   }
   const send = (m: object) => ws.send(JSON.stringify(m))
 
@@ -123,7 +175,7 @@ export async function connect(
               ),
             )
           ch.onclose = null
-          return resolve({ pc, close })
+          return resolve(up())
         case 'unpaired':
           if (!onCode)
             return fail(
@@ -141,7 +193,7 @@ export async function connect(
         case 'approved':
           await setPin(gatewayId, gatewayFp)
           ch.onclose = null
-          return resolve({ pc, close })
+          return resolve(up())
         case 'rejected':
           return fail(new Error(`gateway refused: ${m.reason ?? 'rejected'}`))
       }

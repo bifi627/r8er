@@ -58,8 +58,10 @@ series / episodes → hls.js player over the tunnel (custom loader), subtitles, 
 via Jellyfin UserData. The gateway owns the Jellyfin API key (`R8ER_JELLYFIN_API_KEY`;
 dev: `scripts/setup-jellyfin.sh`): it injects the key, pins the household user, lets
 only an endpoint allowlist through, and redacts the key from playlists. All POC
-paths are deleted. **Next: PR B (trust it)** — `/turn` + client TURN,
-`connection_sessions` telemetry (migration #4), privacy indicator.
+paths are deleted. **PR B (trust it):** `GET /turn` (Cloudflare creds in prod,
+`R8ER_TURN_*` coturn in dev), `connection_sessions` telemetry (migration #4, drops
+the POC's `poc_connectivity`), privacy indicator (direct vs relayed); `?relay`
+forces the relay path. Next: item 6 (hardening).
 
 **Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
 tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
