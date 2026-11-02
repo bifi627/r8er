@@ -107,6 +107,9 @@ func (j *Jellyfin) prepare(rq tunnelReq) (*http.Request, int, error) {
 		case lk == "authorization", lk == "cookie", strings.HasPrefix(lk, "x-emby"),
 			strings.HasPrefix(lk, "x-mediabrowser"):
 			// the browser's credentials (if any) never reach Jellyfin
+		case lk == "accept-encoding":
+			// Go's Transport then negotiates gzip itself and decompresses, so redact
+			// sees plain text; a browser-chosen encoding would hide the key from it
 		default:
 			req.Header.Set(k, v)
 		}
