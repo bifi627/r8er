@@ -15,6 +15,7 @@ const pin = (name: string) =>
 
 export default async function globalSetup() {
   fs.rmSync(logs, { recursive: true, force: true })
+  fs.mkdirSync(logs, { recursive: true })
   const build = (cmd: string, args: string[], cwd: string) =>
     execFileSync(cmd, args, { cwd, stdio: 'inherit' })
 
@@ -96,7 +97,11 @@ export default async function globalSetup() {
         fixed(turnPort, 'udp'),
         ...relayPorts.map((p) => fixed(p, 'udp')),
       )
-      .withWaitStrategy(Wait.forLogMessage(/listener opened on/))
+      .withLogConsumer((stream) =>
+        stream.pipe(fs.createWriteStream(path.join(logs, 'coturn.log'))),
+      )
+      // One line, printed once (listener lines are per thread and vary by host).
+      .withWaitStrategy(Wait.forLogMessage(/Relay ports initialization done/))
       .start(),
     // Build while the containers boot.
     (async () => {
