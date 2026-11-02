@@ -100,8 +100,14 @@ export default async function globalSetup() {
       .withLogConsumer((stream) =>
         stream.pipe(fs.createWriteStream(path.join(logs, 'coturn.log'))),
       )
-      // One line, printed once (listener lines are per thread and vary by host).
-      .withWaitStrategy(Wait.forLogMessage(/Relay ports initialization done/))
+      // Ready = TCP listener up (3479 = 0x0D97). Not a log line: coturn
+      // block-buffers stdout without a TTY, so its log arrives in 4 KB chunks.
+      .withHealthCheck({
+        test: ['CMD-SHELL', `grep -q ':0D97 ' /proc/net/tcp`],
+        interval: 500, // ms
+        retries: 60,
+      })
+      .withWaitStrategy(Wait.forHealthCheck())
       .start(),
     // Build while the containers boot.
     (async () => {
