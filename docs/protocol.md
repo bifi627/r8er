@@ -3,97 +3,97 @@
 Contract-first (per CLAUDE.md). MVP sections first (onboarding, broker,
 pairing), then the Phase-0 POC seed that item 5 deletes. Codegen (C#/Go/TS
 from one schema) is deferred until the protocol stabilizes; for now messages are
-hand-mirrored in Go (`agent/internal/{onboarding,sessions,pairing,tunnel}`), C#
+hand-mirrored in Go (`gateway/internal/{onboarding,sessions,pairing,tunnel}`), C#
 (`Features/Broker`) and TS (`frontend/src/features/pairing`).
 
-## Agent onboarding (MVP item 2)
+## Gateway onboarding (MVP item 2)
 
 Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`.
 Fingerprints everywhere use the form `sha-256 AA:BB:…` (32 upper-case hex
 pairs, SHA-256 over the DER certificate).
 
-**`POST /agents/enrollment-tokens`** (Firebase Bearer) →
+**`POST /gateways/enrollment-tokens`** (Firebase Bearer) →
 `{ token, expiresAt, installCommand, installCommandPowershell }`. Token is
-random 128 bit, single-use, 15 min; server stores only its SHA-256.
+random 128 bit, single-use, 15 min; the API stores only its SHA-256.
 
-**`POST /agents/enroll`** (no auth — the token is the auth)
+**`POST /gateways/enroll`** (no auth — the token is the auth)
 ```json
 { "token": "…", "fingerprint": "sha-256 AB:…", "name": "nas" }
 ```
-→ `200 { "deviceId": "<uuid>", "credential": "…" }` (credential: 256 bit,
-shown once, server keeps its SHA-256) · `400` malformed fingerprint ·
+→ `200 { "gatewayId": "<uuid>", "credential": "…" }` (credential: 256 bit,
+shown once, the API keeps its SHA-256) · `400` malformed fingerprint ·
 `401` token unknown, expired, or used.
 
-**`GET /agents/ws`** — agent control WebSocket, `Authorization: Bearer
-<credential>` (`401` before upgrade if unknown). Agent → server, one JSON text
+**`GET /gateways/ws`** — gateway control WebSocket, `Authorization: Bearer
+<credential>` (`401` before upgrade if unknown). Gateway → API, one JSON text
 frame on connect and every 30 s:
 ```json
 { "type": "heartbeat", "lanUrl": "http://192.168.1.20:8097" }
 ```
-Server sets `last_seen_at = now` and `lan_url` (http/https only, else null).
-`GET /devices` reports `online` = last heartbeat within 90 s. The same socket
-carries the agent's half of the broker (below).
+The API sets `last_seen_at = now` and `lan_url` (http/https only, else null).
+`GET /gateways` reports `online` = last heartbeat within 90 s. The same socket
+carries the gateway's half of the broker (below).
 
 ## Broker (MVP item 3)
 
 Tenant-scoped signaling. One JSON object per WebSocket text frame. The broker
 relays SDP/ICE; it can't make either side trust the other (pins + pairing do).
 
-**`GET /broker/ws`** — browser socket, **one socket = one session to one agent**.
-Closing it ends the session (broker sends the agent `bye`).
+**`GET /broker/ws`** — browser socket, **one socket = one session to one gateway**.
+Closing it ends the session (broker sends the gateway `bye`).
 
 | direction | message |
 |---|---|
 | browser → broker | `{type:"auth", token:"<Firebase ID token>"}` — first frame (not a query param: keeps it out of logs). Bad token → close `1008`. |
 | broker → browser | `{type:"ready"}` |
-| browser → broker | `{type:"offer", deviceId, sdp}` — browser is the offerer |
-| broker → browser | `{type:"error", error:"agent offline or unknown"}` — also for another tenant's device (no existence oracle) |
+| browser → broker | `{type:"offer", gatewayId, sdp}` — browser is the offerer |
+| broker → browser | `{type:"error", error:"gateway offline or unknown"}` — also for another tenant's gateway (no existence oracle) |
 | browser → broker | `{type:"ice", candidate}` |
 | broker → browser | `{type:"answer", sdp}` · `{type:"ice", candidate}` |
 
-**Agent side** (on `/agents/ws`): broker → agent `{type:"offer", session, sdp}`,
-`{type:"ice", session, candidate}`, `{type:"bye", session}`; agent → broker
-`{type:"answer"|"ice", session, …}`. The broker only routes an agent's message
-into a session opened *for that device*. The agent keeps one PeerConnection
+**Gateway side** (on `/gateways/ws`): broker → gateway `{type:"offer", session, sdp}`,
+`{type:"ice", session, candidate}`, `{type:"bye", session}`; gateway → broker
+`{type:"answer"|"ice", session, …}`. The broker only routes a gateway's message
+into a session opened *for that gateway*. The gateway keeps one PeerConnection
 per session (several browsers at once).
 
 ## Pairing + connection auth (MVP item 3)
 
 Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`. Browser
-identity = non-extractable WebCrypto ECDSA P-256 **device key**; its
-fingerprint = `sha-256 AA:…` over the SPKI bytes. The **agent pin** = the
-agent's DTLS fingerprint (`a=fingerprint` of the answer SDP). The browser
+identity = non-extractable WebCrypto ECDSA P-256 **client key**; its
+fingerprint = `sha-256 AA:…` over the SPKI bytes. The **gateway pin** = the
+gateway's DTLS fingerprint (`a=fingerprint` of the answer SDP). The browser
 checks the pin **before** `setRemoteDescription` and refuses on mismatch
 (pairing again is allowed: the comparison code authenticates the new cert).
 
 The browser opens a data channel labelled **`auth`** (JSON text frames). Until
-it is authorized, the agent closes every other channel immediately.
+it is authorized, the gateway closes every other channel immediately.
 
 | # | direction | message |
 |---|---|---|
-| 1 | agent → browser | `{type:"challenge", n}` — n = hex(32 random bytes) |
-| 2 | browser → agent | `{type:"auth", spki, sig, pair}` (base64; `pair:true` when the browser has no pin matching this agent cert — forces steps 4–8 even for an allowlisted key, so a changed cert is only accepted via the code). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("r8er-auth-v1\|" + agentDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
-| 3 | agent → browser | `{type:"ok"}` (key on the allowlist and no `pair` → tunnel channels allowed) or `{type:"unpaired"}` |
-| 4 | browser → agent | `{type:"commit", h, name}` — h = hex(SHA-256(utf8(nB))), nB = hex(32 random bytes) |
-| 5 | agent → browser | `{type:"nonce", n: nA}` — only after the commit |
-| 6 | browser → agent | `{type:"reveal", n: nB}` — agent checks it against h |
-| 7 | both | `code = uint32_be(SHA-256(utf8(agentFp + "\|" + keyFp + "\|" + nA + "\|" + nB))[0..4]) mod 1e6`, zero-padded to 6 digits; agent page lists the request (name + code), browser shows the code |
-| 8 | agent → browser | `{type:"approved"}` after **Approve on the agent's local page** (key persisted to `allowlist.json`; browser stores the pin), or `{type:"rejected", reason}` (Reject, 5-min expiry, >3 pending, bad signature/reveal) |
+| 1 | gateway → browser | `{type:"challenge", n}` — n = hex(32 random bytes) |
+| 2 | browser → gateway | `{type:"auth", spki, sig, pair}` (base64; `pair:true` when the browser has no pin matching this gateway cert — forces steps 4–8 even for an allowlisted key, so a changed cert is only accepted via the code). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("r8er-auth-v1\|" + gatewayDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
+| 3 | gateway → browser | `{type:"ok"}` (key on the allowlist and no `pair` → tunnel channels allowed) or `{type:"unpaired"}` |
+| 4 | browser → gateway | `{type:"commit", h, name}` — h = hex(SHA-256(utf8(nB))), nB = hex(32 random bytes) |
+| 5 | gateway → browser | `{type:"nonce", n: nA}` — only after the commit |
+| 6 | browser → gateway | `{type:"reveal", n: nB}` — gateway checks it against h |
+| 7 | both | `code = uint32_be(SHA-256(utf8(gatewayFp + "\|" + keyFp + "\|" + nA + "\|" + nB))[0..4]) mod 1e6`, zero-padded to 6 digits; gateway page lists the request (name + code), browser shows the code |
+| 8 | gateway → browser | `{type:"approved"}` after **Approve on the gateway's local page** (key persisted to `allowlist.json`; browser stores the pin), or `{type:"rejected", reason}` (Reject, 5-min expiry, >3 pending, bad signature/reveal) |
 
 The commit makes the code ungrindable: a MITM gets one guess (10⁻⁶).
 
-**Shared test vectors** (asserted in `agent/internal/pairing` and
+**Shared test vectors** (asserted in `gateway/internal/pairing` and
 `frontend/src/features/pairing/crypto.test.ts`; generated with WebCrypto):
 
 ```
 pkcs8     MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgNfSxgTmdmEdSnpZREJ8zENfSXNkksKt+maxxPfmM/0OhRANCAASZO24jDJAtjsPMwyNMixSTFrNaCBNOcl++jKq1UlDMtdhrPnx+TVcO+RDzLnEwFciaW/hHW06pJCe99d4wkcc3
 spki      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmTtuIwyQLY7DzMMjTIsUkxazWggTTnJfvoyqtVJQzLXYaz58fk1XDvkQ8y5xMBXImlv4R1tOqSQnvfXeMJHHNw==
 keyFp     sha-256 40:F0:B4:7F:13:E4:C0:9B:73:86:7F:7A:77:E1:16:71:A2:AF:84:61:A0:8F:9F:15:25:CB:FE:7F:82:8A:C6:10
-agentFp   sha-256 D4:F0:BC:5A:29:DE:06:B5:10:F9:AA:42:8F:1E:ED:BA:92:60:12:B5:91:FE:F7:A5:18:E7:76:A7:C9:BD:18:24
+gatewayFp   sha-256 D4:F0:BC:5A:29:DE:06:B5:10:F9:AA:42:8F:1E:ED:BA:92:60:12:B5:91:FE:F7:A5:18:E7:76:A7:C9:BD:18:24
 browserFp sha-256 D4:C3:E8:A1:12:56:AB:82:A4:FC:72:56:0E:B4:A2:B0:E8:7B:AD:82:0C:29:0D:D9:B0:36:16:DE:24:0A:A6:DB
 n         00…01 (64 hex chars)
 sig       x4k+pvKpTAYliFPG+JHOlJbXTRZ8F9qtAO+AH4FqD61nmYmrSo7RLbJ1AaQNWHkXj4kbaOVbwHZkdBK51PiBcg==   (verifies)
-code(agentFp, keyFp, nA="11"×32, nB="22"×32) = 138781
+code(gatewayFp, keyFp, nA="11"×32, nB="22"×32) = 138781
 ```
 
 Once authorized, tunnel requests use the framing below, one channel each.
@@ -117,8 +117,8 @@ One JSON object per WebSocket text frame:
 
 | `type`   | carries      | direction        |
 |----------|--------------|------------------|
-| `offer`  | `sdp`        | browser → agent  |
-| `answer` | `sdp`        | agent → browser  |
+| `offer`  | `sdp`        | browser → gateway  |
+| `answer` | `sdp`        | gateway → browser  |
 | `ice`    | `candidate`  | both (trickle)   |
 
 - `sdp` is the WebRTC `RTCSessionDescription` (`{type, sdp}`), present only on `offer`/`answer`.
@@ -126,8 +126,8 @@ One JSON object per WebSocket text frame:
 
 ## POC roles
 
-The **browser is the offerer** and creates the data channel; the **agent is the
-answerer**. The agent must be in the room first (it is the long-lived peer). No
+The **browser is the offerer** and creates the data channel; the **gateway is the
+answerer**. The gateway must be in the room first (it is the long-lived peer). No
 auth, no tenancy — MVP promotes both the relay and this envelope into the
 tenant-isolated broker.
 
@@ -136,31 +136,31 @@ tenant-isolated broker.
 Once the PeerConnection is up, the browser tunnels HTTP over data channels.
 **One data channel per request** — the channel *is* the request/response
 lifecycle, so there are no request IDs, no length prefixes, and no multiplexing
-(and no head-of-line blocking between requests). The agent dispatches inbound
+(and no head-of-line blocking between requests). The gateway dispatches inbound
 channels by label: `throughput` → flood benchmark (step 3); anything else → a
 tunnel request.
 
 Sequence on a request channel:
 
-1. **Browser → agent** (one text frame): the request.
+1. **Browser → gateway** (one text frame): the request.
    ```json
    { "method": "GET", "url": "/web/index.html", "headers": { "Range": "bytes=0-99" } }
    ```
-   `url` is origin-relative; the agent prepends its configured origin
+   `url` is origin-relative; the gateway prepends its configured origin
    (`R8ER_ORIGIN`, default local Jellyfin `http://localhost:8096`). Headers are
    forwarded verbatim — **`Range` must survive intact or seek breaks.**
-2. **Agent → browser** (one text frame): the response head.
+2. **Gateway → browser** (one text frame): the response head.
    ```json
    { "status": 206, "headers": { "Content-Range": "bytes 0-99/9723", "...": "..." } }
    ```
-3. **Agent → browser** (zero or more binary frames): the body, in ~16KB chunks
+3. **Gateway → browser** (zero or more binary frames): the body, in ~16KB chunks
    under `bufferedAmount` backpressure (never a whole segment in one message).
-4. **Agent closes the channel** — close is the body's **EOF** marker.
+4. **Gateway closes the channel** — close is the body's **EOF** marker.
 
 Frames are told apart by type: the head is a **text** frame, body chunks are
 **binary**. POC tunnels body-less GETs only (playlists, segments, ranged reads).
 
-**The tunnel is byte-transparent.** The agent forwards request headers verbatim
+**The tunnel is byte-transparent.** The gateway forwards request headers verbatim
 and relays the origin's response body unchanged — it does **not** negotiate or
 apply content compression on the browser's behalf (Go's default transport would
 inject `Accept-Encoding: gzip` and silently decompress, rewriting the body and

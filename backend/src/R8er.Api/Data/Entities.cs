@@ -16,19 +16,19 @@ public class AppUser
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-public class Device : ITenantOwned
+public class Gateway : ITenantOwned
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }
     public string? Name { get; set; }
-    public string? DtlsFingerprint { get; set; }        // agent's persistent DTLS cert, set at enrollment; pinned
-    public string? AgentCredentialHash { get; set; }    // SHA-256 hex of the agent credential (never the plaintext)
-    public string? LanUrl { get; set; }                 // agent page on the home LAN, from heartbeat
+    public string? DtlsFingerprint { get; set; }        // gateway's persistent DTLS cert, set at enrollment; pinned
+    public string? CredentialHash { get; set; }    // SHA-256 hex of the gateway credential (never the plaintext)
+    public string? LanUrl { get; set; }                 // gateway page on the home LAN, from heartbeat
     public DateTimeOffset? LastSeenAt { get; set; }      // heartbeat → online/offline
     public DateTimeOffset CreatedAt { get; set; }
 }
 
-/// One-time agent enrollment token (onboarding flow 1). Only the SHA-256 hash
+/// One-time gateway enrollment token (onboarding flow 1). Only the SHA-256 hash
 /// is stored; the plaintext lives in the install command for 15 minutes.
 public class EnrollmentToken : ITenantOwned
 {

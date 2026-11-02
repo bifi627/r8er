@@ -1,5 +1,5 @@
-// Connect to an agent through the tenant broker, enforce the pin, prove this
-// browser's device key, and (when pairing) run commit/reveal for the
+// Connect to a gateway through the tenant broker, enforce the pin, prove this
+// browser's client key, and (when pairing) run commit/reveal for the
 // comparison code. docs/protocol.md, "Broker" + "Pairing".
 import { auth } from '../../firebase'
 import { API } from '../../api'
@@ -13,7 +13,7 @@ import {
   sdpFingerprint,
   sha256,
 } from './crypto'
-import { deviceKey, getPin, setPin } from './store'
+import { clientKey, getPin, setPin } from './store'
 
 export class PinMismatch extends Error {}
 
@@ -22,16 +22,16 @@ export type Session = { pc: RTCPeerConnection; close: () => void }
 type Msg = Record<string, string | undefined> & { type: string }
 
 /**
- * Resolves once the agent lets this browser use the tunnel. With onCode set, an
+ * Resolves once the gateway lets this browser use the tunnel. With onCode set, an
  * unpaired browser starts pairing and onCode receives the code to compare.
  */
 export async function connect(
-  deviceId: string,
+  gatewayId: string,
   onCode?: (code: string) => void,
 ): Promise<Session> {
   const [key, pin, token] = await Promise.all([
-    deviceKey(),
-    getPin(deviceId),
+    clientKey(),
+    getPin(gatewayId),
     auth.currentUser?.getIdToken(),
   ])
   const ws = new WebSocket(API.replace(/^http/, 'ws') + '/broker/ws')
@@ -41,7 +41,7 @@ export async function connect(
   })
   const close = () => {
     pc.close()
-    ws.close() // the broker tells the agent `bye`
+    ws.close() // the broker tells the gateway `bye`
   }
   const send = (m: object) => ws.send(JSON.stringify(m))
 
@@ -50,7 +50,7 @@ export async function connect(
       close()
       reject(e)
     }
-    let agentFp = ''
+    let gatewayFp = ''
     let verdict: ReturnType<typeof pinCheck> = 'refuse'
     let nB = ''
 
@@ -65,17 +65,17 @@ export async function connect(
     const onBroker = async (m: { type: string; [k: string]: any }) => {
       if (m.type === 'ready') {
         await pc.setLocalDescription(await pc.createOffer())
-        send({ type: 'offer', deviceId, sdp: pc.localDescription })
+        send({ type: 'offer', gatewayId, sdp: pc.localDescription })
       } else if (m.type === 'answer') {
-        agentFp = sdpFingerprint(m.sdp.sdp)
-        // Before a single byte goes to the agent: an unexpected certificate means
+        gatewayFp = sdpFingerprint(m.sdp.sdp)
+        // Before a single byte goes to the gateway: an unexpected certificate means
         // someone (possibly r8er's own server) is in the middle. Pairing again is
         // allowed: the comparison code authenticates the new certificate.
-        verdict = pinCheck(pin, agentFp, !!onCode)
+        verdict = pinCheck(pin, gatewayFp, !!onCode)
         if (verdict === 'refuse')
           return fail(
             new PinMismatch(
-              `agent certificate changed: pinned ${pin}, got ${agentFp}`,
+              `gateway certificate changed: pinned ${pin}, got ${gatewayFp}`,
             ),
           )
         await pc.setRemoteDescription(m.sdp)
@@ -90,19 +90,19 @@ export async function connect(
 
     const ch = pc.createDataChannel('auth')
     const say = (m: object) => ch.send(JSON.stringify(m))
-    ch.onclose = () => fail(new Error('agent closed the connection'))
-    ch.onmessage = (e) => onAgent(JSON.parse(e.data)).catch(fail)
-    const onAgent = async (m: Msg) => {
+    ch.onclose = () => fail(new Error('gateway closed the connection'))
+    ch.onmessage = (e) => onGateway(JSON.parse(e.data)).catch(fail)
+    const onGateway = async (m: Msg) => {
       switch (m.type) {
         case 'challenge': {
           const browserFp = sdpFingerprint(pc.localDescription!.sdp)
           const sig = await crypto.subtle.sign(
             { name: 'ECDSA', hash: 'SHA-256' },
             key.privateKey,
-            authMessage(agentFp, browserFp, m.n!),
+            authMessage(gatewayFp, browserFp, m.n!),
           )
-          // No matching pin (new browser, or the agent's cert changed): ask for
-          // the code comparison even if the agent knows our key — "ok" alone
+          // No matching pin (new browser, or the gateway's cert changed): ask for
+          // the code comparison even if the gateway knows our key — "ok" alone
           // can't vouch for a certificate we haven't verified.
           return say({
             type: 'auth',
@@ -115,14 +115,16 @@ export async function connect(
           if (verdict !== 'pinned')
             return fail(
               new PinMismatch(
-                'agent skipped pairing for an unpinned certificate',
+                'gateway skipped pairing for an unpinned certificate',
               ),
             )
           ch.onclose = null
           return resolve({ pc, close })
         case 'unpaired':
           if (!onCode)
-            return fail(new Error('this browser is not paired with the agent'))
+            return fail(
+              new Error('this browser is not paired with the gateway'),
+            )
           nB = nonce()
           return say({
             type: 'commit',
@@ -131,13 +133,13 @@ export async function connect(
           })
         case 'nonce':
           say({ type: 'reveal', n: nB })
-          return onCode?.(await comparisonCode(agentFp, key.fp, m.n!, nB))
+          return onCode?.(await comparisonCode(gatewayFp, key.fp, m.n!, nB))
         case 'approved':
-          await setPin(deviceId, agentFp)
+          await setPin(gatewayId, gatewayFp)
           ch.onclose = null
           return resolve({ pc, close })
         case 'rejected':
-          return fail(new Error(`agent refused: ${m.reason ?? 'rejected'}`))
+          return fail(new Error(`gateway refused: ${m.reason ?? 'rejected'}`))
       }
     }
   })

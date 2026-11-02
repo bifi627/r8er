@@ -14,7 +14,7 @@ public class BrokerSteps(IntegrationFixture fx)
 {
     const string Fp = "sha-256 AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89";
 
-    private readonly Dictionary<string, (Guid Id, WebSocket Ws)> _agents = new();
+    private readonly Dictionary<string, (Guid Id, WebSocket Ws)> _gateways = new();
     // ! assigned by the browser-connect step before any step uses it
     private WebSocket _browser = null!;
     private string _session = "";
@@ -22,7 +22,7 @@ public class BrokerSteps(IntegrationFixture fx)
     [AfterScenario]
     public void Close()
     {
-        foreach (var (_, ws) in _agents.Values)
+        foreach (var (_, ws) in _gateways.Values)
         {
             ws.Dispose();
         }
@@ -30,40 +30,40 @@ public class BrokerSteps(IntegrationFixture fx)
         _browser?.Dispose();
     }
 
-    [Given("\"(.*)\" has an online agent \"(.*)\"")]
-    public async Task GivenOnlineAgent(string email, string name)
+    [Given("\"(.*)\" has an online gateway \"(.*)\"")]
+    public async Task GivenOnlineGateway(string email, string name)
     {
         using var client = fx.Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await IdToken(email));
-        var token = (await (await client.PostAsync("/agents/enrollment-tokens", null)).Content.ReadFromJsonAsync<JsonElement>())
+        var token = (await (await client.PostAsync("/gateways/enrollment-tokens", null)).Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("token").GetString();
-        var enrolled = await (await client.PostAsJsonAsync("/agents/enroll", new { token, fingerprint = Fp, name }))
+        var enrolled = await (await client.PostAsJsonAsync("/gateways/enroll", new { token, fingerprint = Fp, name }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var id = enrolled.GetProperty("deviceId").GetGuid();
+        var id = enrolled.GetProperty("gatewayId").GetGuid();
 
         var wsc = fx.Factory.Server.CreateWebSocketClient();
         wsc.ConfigureRequest = r => r.Headers.Authorization = $"Bearer {enrolled.GetProperty("credential").GetString()}";
-        var ws = await wsc.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/agents/ws"), CancellationToken.None);
-        while (!Hub.Agents.ContainsKey(id))
+        var ws = await wsc.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/gateways/ws"), CancellationToken.None);
+        while (!Hub.Gateways.ContainsKey(id))
         {
             await Task.Delay(10);   // server registers right after the upgrade
         }
 
-        _agents[name] = (id, ws);
+        _gateways[name] = (id, ws);
     }
 
-    [When("\"(.*)\" offers to agent \"(.*)\"")]
+    [When("\"(.*)\" offers to gateway \"(.*)\"")]
     public async Task WhenOffer(string email, string name)
     {
         await BrowserAuth(await IdToken(email));
         Assert.Equal("ready", (await Receive(_browser))?.GetProperty("type").GetString());
-        await Send(_browser, new { type = "offer", deviceId = _agents[name].Id, sdp = new { type = "offer", sdp = "v=0 fake" } });
+        await Send(_browser, new { type = "offer", gatewayId = _gateways[name].Id, sdp = new { type = "offer", sdp = "v=0 fake" } });
     }
 
-    [StepDefinition("agent \"(.*)\" receives the offer")]
-    public async Task ThenAgentGetsOffer(string name)
+    [StepDefinition("gateway \"(.*)\" receives the offer")]
+    public async Task ThenGatewayGetsOffer(string name)
     {
-        var m = Assert.NotNull(await Receive(_agents[name].Ws));
+        var m = Assert.NotNull(await Receive(_gateways[name].Ws));
         Assert.Equal("offer", m.GetProperty("type").GetString());
         Assert.Equal("v=0 fake", m.GetProperty("sdp").GetProperty("sdp").GetString());
         var session = m.GetProperty("session").GetString();
@@ -71,10 +71,10 @@ public class BrokerSteps(IntegrationFixture fx)
         _session = session;
     }
 
-    [When("agent \"(.*)\" answers that session")]
+    [When("gateway \"(.*)\" answers that session")]
     public async Task WhenAnswer(string name)
     {
-        await Send(_agents[name].Ws, new { type = "answer", session = _session, sdp = new { type = "answer", sdp = "v=0 answer" } });
+        await Send(_gateways[name].Ws, new { type = "answer", session = _session, sdp = new { type = "answer", sdp = "v=0 answer" } });
     }
 
     [Then("the browser receives the answer")]
@@ -89,13 +89,13 @@ public class BrokerSteps(IntegrationFixture fx)
         Assert.Null(await Receive(_browser, quiet: true));
     }
 
-    [Then("agent \"(.*)\" receives nothing")]
-    public async Task ThenAgentNothing(string name)
+    [Then("gateway \"(.*)\" receives nothing")]
+    public async Task ThenGatewayNothing(string name)
     {
-        Assert.Null(await Receive(_agents[name].Ws, quiet: true));
+        Assert.Null(await Receive(_gateways[name].Ws, quiet: true));
     }
 
-    [Then("the browser is told the agent is offline or unknown")]
+    [Then("the browser is told the gateway is offline or unknown")]
     public async Task ThenBrowserError()
     {
         Assert.Equal("error", Assert.NotNull(await Receive(_browser)).GetProperty("type").GetString());

@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test'
 
 // One golden path (dev-env spec): the whole stack — testcontainers for Postgres,
-// Firebase Auth emulator, Jellyfin; backend, Vite, and the agent as real
+// Firebase Auth emulator, Jellyfin; backend, Vite, and the gateway as real
 // processes — is started by global-setup.ts, not `webServer` (it needs the
 // containers' random ports, which only exist after setup runs).
 export default defineConfig({

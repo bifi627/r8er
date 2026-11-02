@@ -7,7 +7,7 @@ using R8er.Api;
 using R8er.Api.Auth;
 using R8er.Api.Data;
 using R8er.Api.Features.Broker;
-using R8er.Api.Features.Devices;
+using R8er.Api.Features.Gateways;
 using R8er.Api.Features.Me;
 using R8er.Api.Features.Onboarding;
 using R8er.Api.Features.Poc;
@@ -15,7 +15,7 @@ using R8er.Api.Features.Poc;
 var builder = WebApplication.CreateBuilder(args);
 
 // CORS allowlist = the SPA origins (comma-separated CORS_ORIGINS; default = vite dev).
-// wwwroot harness pages are same-origin, the agent isn't a browser, and WebSockets
+// wwwroot harness pages are same-origin, the gateway isn't a browser, and WebSockets
 // ignore CORS (/broker/ws authenticates in-band), so only the SPA needs listing.
 var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:5173")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -100,10 +100,10 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 // Vertical slices: one file per use case under Features/<Slice>/, mapped here.
 await PocEndpoints.MapAsync(app, connString);
 GetMe.Map(app);
-ListDevices.Map(app);
+ListGateways.Map(app);
 CreateEnrollmentToken.Map(app);
 Enroll.Map(app);
-AgentSocket.Map(app);
+GatewaySocket.Map(app);
 BrowserSocket.Map(app);
 
 app.Run();

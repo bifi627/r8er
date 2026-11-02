@@ -26,7 +26,7 @@ measure yet.
 ### POC paths still live
 **Area:** POC paths
 
-`/signaling/{room}`, `agent/internal/poc` (+ POC mode in `main.go`),
+`/signaling/{room}`, `gateway/internal/poc` (+ POC mode in `main.go`),
 `wwwroot/{play,connect}.html`, `dev/*.html` stay so streaming never regresses
 before the real client. Unauthenticated relay, no tenant data.
 
@@ -39,35 +39,20 @@ Broker registry is in-memory: correct only with a single API instance (Railway t
 
 **Pay down:** second API instance → Postgres LISTEN/NOTIFY or Redis.
 
-### Agent cert has no rotation
-**Area:** agent / cert rotation
+### Gateway cert has no rotation
+**Area:** gateway / cert rotation
 
-Agent DTLS cert is 10 years with no rotation (spec non-goal: rotation =
+Gateway DTLS cert is 10 years with no rotation (spec non-goal: rotation =
 re-onboard + re-pair). A once-a-decade manual step will be forgotten, and Pion
-refuses an expired cert → agent down at expiry. Plan (SSH UpdateHostKeys-style):
-~1-year cert; ~60 days before expiry the agent pre-generates the next cert
+refuses an expired cert → gateway down at expiry. Plan (SSH UpdateHostKeys-style):
+~1-year cert; ~60 days before expiry the gateway pre-generates the next cert
 (state dir) and sends `{type:"next-pin", fp}` on the `auth` channel *after* the
-old pin verified; browser stores it as a second pin; agent switches at expiry;
+old pin verified; browser stores it as a second pin; gateway switches at expiry;
 reports the new fp to the server (display only). Browsers unused for the whole
 window re-pair (= today). ~40 lines Go + ~15 TS + protocol.md message + Go/TS
 test. Keep 10 years until this exists.
 
-**Pay down:** item 4 (productized agent, alongside auto-update).
-
-### Rename agent/device → server/client
-**Area:** naming / whole repo
-
-Owner-decided vocabulary (2026-11-01): **server** = the home box serving media
-(today: "agent" / `Device`), **client** = a paired browser consuming it (PR B
-spec: "browser device"). "Agent" is ambiguous with AI agents; "device" covers
-both sides. Rename spans `agent/` dir + Go module, `devices` table (rename
-migration), `Device` entity, `/agents/*` + `/devices` routes,
-`features/devices`, live docs (CLAUDE.md, protocol.md, tools.md, pairing spec).
-Collision to resolve: the control plane is also called "server" today
-(`R8ER_SERVER_URL`, backend) — needs its own name (e.g. control plane,
-`R8ER_CONTROL_URL`). Dated POC/init docs stay as records + a glossary note.
-
-**Pay down:** no fixed trigger — own `chore/rename-server-client` branch whenever there's a quiet gap; cheaper the earlier.
+**Pay down:** item 4 (productized gateway, alongside auto-update).
 
 ### npm audit: frontend grpc-js (via firebase)
 **Area:** frontend / npm audit

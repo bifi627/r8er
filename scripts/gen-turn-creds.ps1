@@ -6,7 +6,7 @@
 .DESCRIPTION
   Calls Cloudflare's generate-ice-servers endpoint with your TURN key, saves the
   full iceServers response to dev/.cloudflare-turn.json (git-ignored), and emits:
-    - the agent env vars (start the home agent with TURN enabled)
+    - the gateway env vars (start the home gateway with TURN enabled)
     - a bookmarkable phone harness URL (creds pre-filled, natural direct/relay)
   Throwaway dev tooling: creds expire (default 24h); re-run to refresh.
 
@@ -60,14 +60,14 @@ $enc      = { param($s) [uri]::EscapeDataString($s) }
 Write-Host "`n=== ICE servers ===" -ForegroundColor Cyan
 $resp.iceServers | ConvertTo-Json -Depth 6
 
-# --- Agent env (run the home agent with Cloudflare TURN) --------------------
-Write-Host "`n=== Home agent (PowerShell) ===" -ForegroundColor Cyan
+# --- Gateway env (run the home gateway with Cloudflare TURN) --------------------
+Write-Host "`n=== Home gateway (PowerShell) ===" -ForegroundColor Cyan
 Write-Host @"
 `$env:R8ER_SIGNAL_URL   = "$($RailwayBase -replace '^http','ws')/signaling/poc"
 `$env:R8ER_ICE_URLS     = "$urls"
 `$env:R8ER_ICE_USERNAME = "$user"
 `$env:R8ER_ICE_CREDENTIAL = "$cred"
-go run ./cmd/agent      # from the agent/ directory
+go run ./cmd/gateway      # from the gateway/ directory
 "@
 
 # --- Phone harness URL (natural direct-vs-relay; edit the note per location) -

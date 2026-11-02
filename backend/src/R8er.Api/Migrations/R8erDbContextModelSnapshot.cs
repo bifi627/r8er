@@ -53,45 +53,6 @@ namespace R8er.Api.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("R8er.Api.Data.Device", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AgentCredentialHash")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DtlsFingerprint")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LanUrl")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("LastSeenAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgentCredentialHash")
-                        .IsUnique();
-
-                    b.HasIndex("TenantId");
-
-                    b.ToTable("devices", (string)null);
-                });
-
             modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -126,6 +87,45 @@ namespace R8er.Api.Migrations
                     b.ToTable("enrollment_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("R8er.Api.Data.Gateway", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CredentialHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DtlsFingerprint")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LanUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialHash")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("gateways", (string)null);
+                });
+
             modelBuilder.Entity("R8er.Api.Data.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -154,7 +154,7 @@ namespace R8er.Api.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("R8er.Api.Data.Device", b =>
+            modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
                 {
                     b.HasOne("R8er.Api.Data.Tenant", null)
                         .WithMany()
@@ -163,7 +163,7 @@ namespace R8er.Api.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("R8er.Api.Data.EnrollmentToken", b =>
+            modelBuilder.Entity("R8er.Api.Data.Gateway", b =>
                 {
                     b.HasOne("R8er.Api.Data.Tenant", null)
                         .WithMany()

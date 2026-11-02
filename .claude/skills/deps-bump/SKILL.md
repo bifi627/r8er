@@ -2,7 +2,7 @@
 name: deps-bump
 description: >-
   Use when bumping dependencies in r8er — NuGet (backend), npm (frontend/e2e:
-  React / Vite / TypeScript), Go modules (agent), pinned Docker images
+  React / Vite / TypeScript), Go modules (gateway), pinned Docker images
   (compose: Jellyfin/Postgres/coturn), GitHub Actions, or devcontainer
   features. Triggered by Dependabot PRs, an explicit "update X" request, or a
   periodic outdated sweep. Do NOT use for adding a brand-new dependency or for
@@ -24,7 +24,7 @@ This skill stores no pending-bump state — derive the candidate set at runtime:
 ```bash
 dotnet list backend/R8er.slnx package --outdated
 npm outdated --prefix frontend            # and any other package dirs (e2e/)
-cd agent && go list -m -u all             # Go modules
+cd gateway && go list -m -u all             # Go modules
 # plus: image pins in docker-compose.yml, .devcontainer/devcontainer.json
 #       features, and action versions in .github/workflows/*.yml (once CI exists)
 ```
@@ -47,7 +47,7 @@ Then:
 | React | `react` + `react-dom` + `@types/react` + `@types/react-dom` |
 | Pion | `pion/webrtc` and its transitive pion siblings — take what `go get -u` resolves together |
 
-**Jellyfin image pin is NOT a routine bump.** The agent drives Jellyfin's
+**Jellyfin image pin is NOT a routine bump.** The gateway drives Jellyfin's
 API; a Jellyfin bump needs the integration tests against the new pin and a
 manual play/seek check — treat it as a major, always its own wave.
 
@@ -57,7 +57,7 @@ manual play/seek check — treat it as a major, always its own wave.
 dotnet test backend/R8er.slnx             # needs Docker (Testcontainers)
 npm run build --prefix frontend           # tsc -b + vite build
 npm run lint --prefix frontend
-cd agent && go build ./... && go test ./...
+cd gateway && go build ./... && go test ./...
 docker compose config --quiet             # after any compose pin change
 ```
 

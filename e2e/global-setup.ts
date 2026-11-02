@@ -70,10 +70,10 @@ export default async function globalSetup() {
       )
       const bin = path.join(
         os.tmpdir(),
-        `r8er-e2e-agent${process.platform === 'win32' ? '.exe' : ''}`,
+        `r8er-e2e-gateway${process.platform === 'win32' ? '.exe' : ''}`,
       )
-      build('go', ['build', '-o', bin, './cmd/agent'], path.join(root, 'agent'))
-      process.env.E2E_AGENT_BIN = bin
+      build('go', ['build', '-o', bin, './cmd/gateway'], path.join(root, 'gateway'))
+      process.env.E2E_GATEWAY_BIN = bin
     })(),
   ])
 

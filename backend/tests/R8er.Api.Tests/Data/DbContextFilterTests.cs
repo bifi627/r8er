@@ -26,7 +26,7 @@ public class DbContextFilterTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Global_filter_returns_only_the_current_tenants_devices()
+    public async Task Global_filter_returns_only_the_current_tenants_gateways()
     {
         Guid tenantA, tenantB;
         await using (var seed = NewContext())
@@ -37,8 +37,8 @@ public class DbContextFilterTests : IAsyncLifetime
             await seed.SaveChangesAsync();
             tenantA = a.Id;
             tenantB = b.Id;
-            seed.Devices.Add(new Device { TenantId = tenantA, Name = "a-box" });
-            seed.Devices.Add(new Device { TenantId = tenantB, Name = "b-box" });
+            seed.Gateways.Add(new Gateway { TenantId = tenantA, Name = "a-box" });
+            seed.Gateways.Add(new Gateway { TenantId = tenantB, Name = "b-box" });
             await seed.SaveChangesAsync();
         }
 
@@ -47,7 +47,7 @@ public class DbContextFilterTests : IAsyncLifetime
 
         // Even a query that "forgets" a tenant Where returns only tenant A's row —
         // the filter, not the caller, enforces isolation.
-        var visible = await db.Devices.ToListAsync();
+        var visible = await db.Gateways.ToListAsync();
 
         Assert.Single(visible);
         Assert.Equal("a-box", visible[0].Name);
@@ -65,8 +65,8 @@ public class DbContextFilterTests : IAsyncLifetime
             await seed.SaveChangesAsync();
             tenantA = a.Id;
             tenantB = b.Id;
-            seed.Devices.Add(new Device { TenantId = tenantA, Name = "a-box" });
-            seed.Devices.Add(new Device { TenantId = tenantB, Name = "b-box" });
+            seed.Gateways.Add(new Gateway { TenantId = tenantA, Name = "a-box" });
+            seed.Gateways.Add(new Gateway { TenantId = tenantB, Name = "b-box" });
             await seed.SaveChangesAsync();
         }
 
@@ -74,7 +74,7 @@ public class DbContextFilterTests : IAsyncLifetime
         db.CurrentTenantId = null;
 
         // Pre-auth state: no tenant means no rows, ever — fails closed, not open.
-        var visible = await db.Devices.ToListAsync();
+        var visible = await db.Gateways.ToListAsync();
 
         Assert.Empty(visible);
     }

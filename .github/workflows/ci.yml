@@ -40,20 +40,20 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
-  agent:
+  gateway:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: agent/go.mod
+          go-version-file: gateway/go.mod
       - run: test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
-        working-directory: agent
+        working-directory: gateway
       - run: go vet ./... && go build ./... && go test ./...
-        working-directory: agent
+        working-directory: gateway
 
   # The one golden path (dev-env spec). Containers via testcontainers-node,
-  # backend/Vite/agent as real processes — see e2e/global-setup.ts.
+  # backend/Vite/gateway as real processes — see e2e/global-setup.ts.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -62,8 +62,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
       - uses: actions/setup-go@v7
         with:
-          go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
+          go-version-file: gateway/go.mod
+          cache-dependency-path: gateway/go.sum
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc

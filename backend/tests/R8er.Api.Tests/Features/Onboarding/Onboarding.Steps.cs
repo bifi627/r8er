@@ -33,7 +33,7 @@ public class OnboardingSteps(IntegrationFixture fx)
     private async Task<string> CreateToken(string email)
     {
         using var client = await SignIn(email);
-        var res = await client.PostAsync("/agents/enrollment-tokens", null);
+        var res = await client.PostAsync("/gateways/enrollment-tokens", null);
         res.EnsureSuccessStatusCode();
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
         var token = body.GetProperty("token").GetString();
@@ -45,13 +45,13 @@ public class OnboardingSteps(IntegrationFixture fx)
     private async Task<HttpResponseMessage> Enroll(string token, string name = "box")
     {
         using var client = fx.Factory.CreateClient();
-        return await client.PostAsJsonAsync("/agents/enroll", new { token, fingerprint = Fp, name });
+        return await client.PostAsJsonAsync("/gateways/enroll", new { token, fingerprint = Fp, name });
     }
 
-    private async Task<JsonElement> Devices(string email)
+    private async Task<JsonElement> Gateways(string email)
     {
         using var client = await SignIn(email);
-        return await client.GetFromJsonAsync<JsonElement>("/devices");
+        return await client.GetFromJsonAsync<JsonElement>("/gateways");
     }
 
     [Given("\"(.*)\" created an enrollment token")]
@@ -69,7 +69,7 @@ public class OnboardingSteps(IntegrationFixture fx)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.ExpiresAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
     }
 
-    [Given("\"(.*)\" has an enrolled agent \"(.*)\"")]
+    [Given("\"(.*)\" has an enrolled gateway \"(.*)\"")]
     public async Task GivenEnrolled(string email, string name)
     {
         var res = await Enroll(await CreateToken(email), name);
@@ -80,7 +80,7 @@ public class OnboardingSteps(IntegrationFixture fx)
         _credentials[name] = credential;
     }
 
-    [When("an agent enrolls with that token")]
+    [When("a gateway enrolls with that token")]
     public async Task WhenEnroll()
     {
         _enrollStatus = (await Enroll(_token)).StatusCode;
@@ -98,20 +98,20 @@ public class OnboardingSteps(IntegrationFixture fx)
         Assert.Equal(HttpStatusCode.Unauthorized, _enrollStatus);
     }
 
-    [Then("\"(.*)\" sees ([0-9]+) devices?")]
+    [Then("\"(.*)\" sees ([0-9]+) gateways?")]
     public async Task ThenSeesCount(string email, int n)
     {
-        Assert.Equal(n, (await Devices(email)).GetArrayLength());
+        Assert.Equal(n, (await Gateways(email)).GetArrayLength());
     }
 
     private async Task<WebSocket> Connect(string credential)
     {
         var ws = fx.Factory.Server.CreateWebSocketClient();
         ws.ConfigureRequest = r => r.Headers.Authorization = $"Bearer {credential}";
-        return await ws.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/agents/ws"), CancellationToken.None);
+        return await ws.ConnectAsync(new Uri(fx.Factory.Server.BaseAddress, "/gateways/ws"), CancellationToken.None);
     }
 
-    [When("an agent connects with credential \"(.*)\"")]
+    [When("a gateway connects with credential \"(.*)\"")]
     public async Task WhenConnect(string credential)
     {
         try
@@ -124,13 +124,13 @@ public class OnboardingSteps(IntegrationFixture fx)
         }   // TestServer: handshake got a non-101 status
     }
 
-    [Then("the agent connection is refused")]
+    [Then("the gateway connection is refused")]
     public void ThenRefused()
     {
         Assert.True(_refused);
     }
 
-    [When("agent \"(.*)\" heartbeats with LAN URL \"(.*)\"")]
+    [When("gateway \"(.*)\" heartbeats with LAN URL \"(.*)\"")]
     public async Task WhenHeartbeat(string name, string lanUrl)
     {
         using var ws = await Connect(_credentials[name]);
@@ -139,15 +139,15 @@ public class OnboardingSteps(IntegrationFixture fx)
         await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);   // server finishes the frame first
     }
 
-    private async Task<JsonElement> Device(string email, string name)
+    private async Task<JsonElement> Gateway(string email, string name)
     {
-        return (await Devices(email)).EnumerateArray().Single(d => d.GetProperty("name").GetString() == name);
+        return (await Gateways(email)).EnumerateArray().Single(d => d.GetProperty("name").GetString() == name);
     }
 
     [Then("\"(.*)\" sees \"(.*)\" online at \"(.*)\"")]
     public async Task ThenOnline(string email, string name, string lanUrl)
     {
-        var d = await Device(email, name);
+        var d = await Gateway(email, name);
         Assert.True(d.GetProperty("online").GetBoolean());
         Assert.Equal(lanUrl, d.GetProperty("lanUrl").GetString());
     }
@@ -155,6 +155,6 @@ public class OnboardingSteps(IntegrationFixture fx)
     [Then("\"(.*)\" sees \"(.*)\" offline")]
     public async Task ThenOffline(string email, string name)
     {
-        Assert.False((await Device(email, name)).GetProperty("online").GetBoolean());
+        Assert.False((await Gateway(email, name)).GetProperty("online").GetBoolean());
     }
 }

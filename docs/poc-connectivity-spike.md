@@ -113,13 +113,13 @@ reversible.
 Prints the home-agent env + a bookmarkable phone URL; saves
 `dev/.cloudflare-turn.json` (git-ignored). Re-run when creds expire.
 
-**2. Run the home agent** (paste the script's `=== Home agent ===` block):
+**2. Run the home agent** (paste the script's `=== Home gateway ===` block; the agent is now the gateway):
 ```
 R8ER_SIGNAL_URL   = wss://r8er.up.railway.app/signaling/poc
 R8ER_ICE_URLS     = turn:turn.cloudflare.com:3478?transport=udp,...(all Cloudflare URLs)
 R8ER_ICE_USERNAME = <from script>
 R8ER_ICE_CREDENTIAL = <from script>
-go run ./cmd/agent      # from agent/
+go run ./cmd/gateway    # from gateway/
 ```
 The agent must be the first peer in the room and stay running throughout.
 
@@ -151,7 +151,7 @@ candidate is a black hole.
     outage logs a warning and never takes signaling down.
   - `/connect.html` — the harness, served static from `wwwroot/` so a phone can
     load it same-origin (file:// is desktop-only).
-- **Agent** (`agent/cmd/agent`): `iceServers()` = Google STUN + optional TURN
+- **Agent** (`gateway/cmd/gateway`, was `agent/`): `iceServers()` = Google STUN + optional TURN
   from `R8ER_ICE_*` env.
 - **Harness** (`wwwroot/connect.html`): origin-aware defaults (signal + telemetry
   from `location`); hash params `signal,tele,note,turn,user,cred,relay`. Reuses

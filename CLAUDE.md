@@ -2,7 +2,7 @@
 
 Multi-tenant media platform: users stream their home media (NAS/PC) from a
 browser anywhere, with **zero router configuration** — WebRTC data-channel
-tunnel to a host agent, TURN fallback. Sensitive files never leave the
+tunnel to a home gateway, TURN fallback. Sensitive files never leave the
 user's hardware.
 
 ## Read this first
@@ -12,7 +12,7 @@ Authority order when they disagree:
 
 1. `…-r8er-implementation-plan.md` — **phasing, stack, checkpoints. Start here.**
 2. `…-r8er-feasibility-design.md` — architecture rationale, risks, privacy rules, cost model
-3. `…-r8er-handover-notes.md` — **fine print + what-if hedges. Read before writing tunnel/agent/auth code.**
+3. `…-r8er-handover-notes.md` — **fine print + what-if hedges. Read before writing tunnel/gateway/auth code.**
 4. `…-r8er-dev-environment.md` — dev env & testing strategy (this scaffold implements it)
 
 Tool/service inventory + every credential and how to rotate it: `docs/tools.md`.
@@ -29,11 +29,11 @@ and remux over the tunnel, 4K feasible via ABR. Full record + criteria mapping:
 no auth/tenancy) — MVP rewrites it safely. Carried into MVP (non-blocking): iOS
 Safari device test, codec census over real libraries, Jellyfin NAS footprint +
 GPLv2 check. **Next work: Phase 1 MVP, build order in the implementation plan**
-(control plane → agent pairing with fingerprint pinning → tenant-isolated
-signaling → productized agent → streaming client → hardening).
+(control plane → gateway pairing with fingerprint pinning → tenant-isolated
+signaling → productized gateway → streaming client → hardening).
 
 **Phase 1 MVP — item 1 (control-plane foundation) complete.** Migration #1
-(tenants/users/devices), Firebase ID-token verification (FirebaseAdmin, same path
+(tenants/users/devices, now `gateways`), Firebase ID-token verification (FirebaseAdmin, same path
 dev+prod), first-sign-in tenant provisioning, and the ONE EF global query filter
 enforcing tenant isolation are in. Integration harness: Testcontainers Postgres +
 Firebase Auth emulator, real tokens minted through the prod verify path; behaviors
@@ -41,15 +41,20 @@ covered by Reqnroll (isolation/provisioning/auth-reject) + xUnit edges. React:
 Firebase sign-in + empty authed shell.
 
 **Items 2+3** (design: `docs/superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`,
-supersedes the plan's QR/claim-code sketch), both on `feat/agent-pairing`. **PR A
-(onboarding):** migration #2, enrollment token → `/agents/enroll` → credential,
-authenticated `/agents/ws` heartbeat, persistent 10-year agent DTLS cert + state dir,
-local agent page (Host/Origin guard), Devices list. **PR B (broker + pairing):**
-tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto device key,
-session-bound connection auth, commit/reveal comparison code approved on the agent
+supersedes the plan's QR/claim-code sketch; it predates the rename below). **PR A
+(onboarding):** migration #2, enrollment token → `/gateways/enroll` → credential,
+authenticated `/gateways/ws` heartbeat, persistent 10-year gateway DTLS cert + state dir,
+local gateway page (Host/Origin guard), Gateways list. **PR B (broker + pairing):**
+tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto client key,
+session-bound connection auth, commit/reveal comparison code approved on the gateway
 page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
-**Next: item 4** (productized agent). Naming rename agent→server / device→client
-is queued in TECH_DEBT.md ("Rename agent/device → server/client").
+**Next: item 4** (productized gateway).
+
+**Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
+tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
+"browser device"; its key = client key); **API** = the control plane (`backend/`,
+`R8ER_API_URL`). "Media server" means Jellyfin only; "relay" means TURN only.
+Dated specs/plans keep the old words.
 
 ## Stack & layout
 
@@ -57,8 +62,8 @@ is queued in TECH_DEBT.md ("Rename agent/device → server/client").
 |---|---|---|
 | `backend/` | Control plane: API + WebRTC signaling (one web app) | .NET 10, EF Core, Postgres |
 | `frontend/` | Browser client | React + Vite + TypeScript |
-| `agent/` | Host agent: tunnels local Jellyfin over WebRTC | Go + Pion |
-| `e2e/` | The one E2E golden path: browser → broker → agent → Jellyfin | Playwright + testcontainers-node |
+| `gateway/` | Home gateway: tunnels local Jellyfin over WebRTC | Go + Pion |
+| `e2e/` | The one E2E golden path: browser → broker → gateway → Jellyfin | Playwright + testcontainers-node |
 | `scripts/` | `gen-test-media.sh` (ffmpeg fixtures) | bash |
 | `dev/firebase/` | Auth emulator config for compose | — |
 
@@ -70,8 +75,8 @@ is queued in TECH_DEBT.md ("Rename agent/device → server/client").
 - API tests mirror it: `tests/…/Features/<Slice>/` holds that slice's Reqnroll
   `.feature` + steps and xUnit tests together; `Infrastructure/` = fixture/factory/
   token minter; `Data/` = shared-kernel tests.
-- Agent: package per feature in `agent/internal/<slice>/` with colocated `_test.go`;
-  `cmd/agent/main.go` is wiring only. Slices don't import each other except shared
+- Gateway: package per feature in `gateway/internal/<slice>/` with colocated `_test.go`;
+  `cmd/gateway/main.go` is wiring only. Slices don't import each other except shared
   primitives (`identity`, `tunnel`, `pairing`).
 
 Auth = Firebase (emulator in dev). Media engine = bundled Jellyfin (pinned
@@ -91,8 +96,8 @@ dotnet run --project backend/src/R8er.Api     # backend (or: dotnet watch)
 dotnet test backend/R8er.slnx                 # backend tests (Testcontainers → needs Docker)
 npm run dev --prefix frontend                 # frontend
 npm run build --prefix frontend               # frontend build check
-go run ./cmd/agent                            # agent (from agent/)
-go test ./...                                 # agent tests (from agent/)
+go run ./cmd/gateway                          # gateway (from gateway/)
+go test ./...                                 # gateway tests (from gateway/)
 npm test --prefix e2e                         # E2E golden path (Playwright + Chrome, Docker; ~30s)
 ```
 
@@ -104,7 +109,7 @@ Copy `.env.example` only to override.
 ## Machine notes
 
 - Primary dev machine is Windows 10 + Git Bash + Docker Desktop (WSL2).
-  Go 1.26, .NET 10 SDK, Node 24, Docker are present — agent work runs locally
+  Go 1.26, .NET 10 SDK, Node 24, Docker are present — gateway work runs locally
   now (the devcontainer remains for CI parity / clean-room builds).
 - `.slnx` (not `.sln`) — .NET 10's solution format.
 - `frontend/.npmrc` hardens npm: `ignore-scripts=true`, `min-release-age=7`.
@@ -145,7 +150,7 @@ Copy `.env.example` only to override.
 - **Firebase UID is not a primary key** — own `users.id` (UUID) +
   `firebase_uid` column.
 - **CRUD stays boring** (plain EF Core, no repository ceremony). The
-  cleverness budget goes to tunnel/signaling/agent only. The owner works
+  cleverness budget goes to tunnel/signaling/gateway only. The owner works
   ponytail-style: laziest solution that works, stdlib first, shortest diff.
 - **Connection telemetry is a deliverable**: every WebRTC session attempt
   logs direct-vs-relay, IPv4/v6, throughput to Postgres. Checkpoints read

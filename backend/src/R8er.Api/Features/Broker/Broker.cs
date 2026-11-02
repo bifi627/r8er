@@ -5,24 +5,24 @@ using System.Text.Json.Nodes;
 
 namespace R8er.Api.Features.Broker;
 
-/// Tenant-scoped signaling broker (design: specs/2026-11-01-r8er-agent-pairing-
-/// design.md). Connected agents by device id, live browser sessions by session
+/// Tenant-scoped signaling broker (design: specs/2026-11-01-r8er-gateway-pairing-
+/// design.md). Connected gateways by gateway id, live browser sessions by session
 /// id. The broker relays SDP/ICE but can't make either side trust the other:
 /// pins + pairing do that. ponytail: in-memory, single API instance (Railway);
 /// Postgres LISTEN/NOTIFY or Redis when there's a second instance.
 public static class Broker
 {
-    public static readonly ConcurrentDictionary<Guid, Link> Agents = new();      // device id → agent
+    public static readonly ConcurrentDictionary<Guid, Link> Gateways = new();      // gateway id → gateway
     public static readonly ConcurrentDictionary<Guid, Link> Sessions = new();    // session id → browser
 
     /// One end of a relay. Several readers may write to one socket (many browser
-    /// sessions → one agent), so sends are serialized.
-    public sealed class Link(WebSocket socket, Guid tenantId, Guid deviceId)
+    /// sessions → one gateway), so sends are serialized.
+    public sealed class Link(WebSocket socket, Guid tenantId, Guid gatewayId)
     {
         readonly SemaphoreSlim _send = new(1, 1);
         public WebSocket Socket => socket;
         public Guid TenantId => tenantId;
-        public Guid DeviceId => deviceId;
+        public Guid GatewayId => gatewayId;
 
         public async Task SendAsync(JsonNode msg, CancellationToken ct)
         {

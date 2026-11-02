@@ -4,7 +4,7 @@ using R8er.Api.Data;
 
 namespace R8er.Api.Features.Onboarding;
 
-/// Agent spends its enrollment token: creates the device row (tenant from the
+/// Gateway spends its enrollment token: creates the gateway row (tenant from the
 /// token, pinned DTLS fingerprint) and receives its long-lived credential once.
 /// Unauthenticated — the one-time token IS the auth.
 public static partial class Enroll
@@ -17,7 +17,7 @@ public static partial class Enroll
 
     public static void Map(IEndpointRouteBuilder app)
     {
-        app.MapPost("/agents/enroll", async (Request req, R8erDbContext db, CancellationToken ct) =>
+        app.MapPost("/gateways/enroll", async (Request req, R8erDbContext db, CancellationToken ct) =>
         {
             if (req.Token is not { Length: > 0 } || req.Fingerprint is null || !FingerprintRe().IsMatch(req.Fingerprint))
             {
@@ -41,17 +41,17 @@ public static partial class Enroll
             var tenantId = await tokens.Select(t => t.TenantId).SingleAsync(ct);
 
             var credential = Secrets.New(32);   // 256 bit
-            var device = new Device
+            var gateway = new Gateway
             {
                 TenantId = tenantId,
-                Name = req.Name is { Length: > 0 } n ? n[..Math.Min(n.Length, 100)] : "agent",
+                Name = req.Name is { Length: > 0 } n ? n[..Math.Min(n.Length, 100)] : "gateway",
                 DtlsFingerprint = req.Fingerprint,
-                AgentCredentialHash = Secrets.Hash(credential),
+                CredentialHash = Secrets.Hash(credential),
             };
-            db.Devices.Add(device);
+            db.Gateways.Add(gateway);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
-            return Results.Ok(new { deviceId = device.Id, credential });
+            return Results.Ok(new { gatewayId = gateway.Id, credential });
         });
     }
 }

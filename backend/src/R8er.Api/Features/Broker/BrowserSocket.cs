@@ -6,9 +6,9 @@ using R8er.Api.Data;
 
 namespace R8er.Api.Features.Broker;
 
-/// A browser's signaling socket: one WebSocket = one session to one agent. The
+/// A browser's signaling socket: one WebSocket = one session to one gateway. The
 /// Firebase ID token arrives as the first message (not a query param — keeps it
-/// out of logs); the offer may only target an online agent of the caller's tenant.
+/// out of logs); the offer may only target an online gateway of the caller's tenant.
 public static class BrowserSocket
 {
     public static void Map(IEndpointRouteBuilder app)
@@ -23,7 +23,7 @@ public static class BrowserSocket
             using var socket = await ctx.WebSockets.AcceptWebSocketAsync();
             var ct = ctx.RequestAborted;
             Guid session = Guid.Empty;
-            Broker.Link? agent = null;
+            Broker.Link? gateway = null;
             try
             {
                 // Same verify path as the HTTP API (FirebaseAuthHandler), no bypass.
@@ -51,30 +51,30 @@ public static class BrowserSocket
                 {
                     switch ((string?)msg["type"])
                     {
-                        case "offer" when agent is null:
-                            // The tenant filter makes another tenant's device look absent:
+                        case "offer" when gateway is null:
+                            // The tenant filter makes another tenant's gateway look absent:
                             // same answer as unknown/offline, so no existence oracle.
-                            var ok = Guid.TryParse((string?)msg["deviceId"], out var deviceId)
-                                && await db.Devices.AnyAsync(d => d.Id == deviceId, ct)
-                                && Broker.Agents.TryGetValue(deviceId, out agent)
-                                && agent.TenantId == user.TenantId;
-                            if (!ok || agent is null)
+                            var ok = Guid.TryParse((string?)msg["gatewayId"], out var gatewayId)
+                                && await db.Gateways.AnyAsync(d => d.Id == gatewayId, ct)
+                                && Broker.Gateways.TryGetValue(gatewayId, out gateway)
+                                && gateway.TenantId == user.TenantId;
+                            if (!ok || gateway is null)
                             {
-                                agent = null;
-                                await me.SendAsync(new JsonObject { ["type"] = "error", ["error"] = "agent offline or unknown" }, ct);
+                                gateway = null;
+                                await me.SendAsync(new JsonObject { ["type"] = "error", ["error"] = "gateway offline or unknown" }, ct);
                                 continue;
                             }
                             session = Guid.NewGuid();
-                            Broker.Sessions[session] = new Broker.Link(socket, user.TenantId, deviceId);
-                            await agent.SendAsync(new JsonObject
+                            Broker.Sessions[session] = new Broker.Link(socket, user.TenantId, gatewayId);
+                            await gateway.SendAsync(new JsonObject
                             {
                                 ["type"] = "offer",
                                 ["session"] = session.ToString(),
                                 ["sdp"] = msg["sdp"]?.DeepClone(),
                             }, ct);
                             break;
-                        case "ice" when agent is not null:
-                            await agent.SendAsync(new JsonObject
+                        case "ice" when gateway is not null:
+                            await gateway.SendAsync(new JsonObject
                             {
                                 ["type"] = "ice",
                                 ["session"] = session.ToString(),
@@ -87,9 +87,9 @@ public static class BrowserSocket
             catch (Exception) { }   // a dropped browser socket must never crash the process
             finally
             {
-                if (session != Guid.Empty && Broker.Sessions.TryRemove(session, out _) && agent is not null)
+                if (session != Guid.Empty && Broker.Sessions.TryRemove(session, out _) && gateway is not null)
                 {
-                    await agent.SendAsync(new JsonObject { ["type"] = "bye", ["session"] = session.ToString() }, CancellationToken.None);
+                    await gateway.SendAsync(new JsonObject { ["type"] = "bye", ["session"] = session.ToString() }, CancellationToken.None);
                 }
             }
         });

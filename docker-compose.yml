@@ -1,4 +1,4 @@
-# r8er dev dependencies. Backend/frontend/agent run natively (see CLAUDE.md).
+# r8er dev dependencies. Backend/frontend/gateway run natively (see CLAUDE.md).
 # Usage: docker compose up -d
 #        docker compose --profile relay up -d   (adds local TURN)
 services:

@@ -1,4 +1,4 @@
-// Pure pairing crypto, mirrored by agent/internal/pairing (docs/protocol.md,
+// Pure pairing crypto, mirrored by gateway/internal/pairing (docs/protocol.md,
 // "Pairing"). No imports, so node --test runs it against the shared vectors.
 
 const enc = new TextEncoder()
@@ -30,35 +30,35 @@ export function sdpFingerprint(sdp: string) {
   return 'sha-256 ' + m[1].toUpperCase()
 }
 
-/** What the device key signs: bound to both DTLS fingerprints of this session. */
-export const authMessage = (agentFp: string, browserFp: string, n: string) =>
-  enc.encode(`r8er-auth-v1|${agentFp}|${browserFp}|${n}`)
+/** What the client key signs: bound to both DTLS fingerprints of this session. */
+export const authMessage = (gatewayFp: string, browserFp: string, n: string) =>
+  enc.encode(`r8er-auth-v1|${gatewayFp}|${browserFp}|${n}`)
 
 /** 6-digit comparison code over the committed nonces. */
 export async function comparisonCode(
-  agentFp: string,
+  gatewayFp: string,
   keyFp: string,
   nA: string,
   nB: string,
 ) {
-  const h = await sha256(`${agentFp}|${keyFp}|${nA}|${nB}`)
+  const h = await sha256(`${gatewayFp}|${keyFp}|${nA}|${nB}`)
   return String(new DataView(h).getUint32(0) % 1_000_000).padStart(6, '0')
 }
 
 export const nonce = () => hex(crypto.getRandomValues(new Uint8Array(32)))
 
 /**
- * The browser's pin decision for the agent cert in the answer SDP:
- * - `pinned`: matches the pin → the agent's plain "ok" may be trusted
+ * The browser's pin decision for the gateway cert in the answer SDP:
+ * - `pinned`: matches the pin → the gateway's plain "ok" may be trusted
  * - `unpinned`: no pin, or pairing again → only the code comparison may vouch
  *   for this cert (auth carries `pair: true`)
  * - `refuse`: mismatch outside pairing → stop before sending a byte
  */
 export function pinCheck(
   pin: string | undefined,
-  agentFp: string,
+  gatewayFp: string,
   pairing: boolean,
 ): 'pinned' | 'unpinned' | 'refuse' {
-  if (pin === agentFp) return 'pinned'
+  if (pin === gatewayFp) return 'pinned'
   return pin && !pairing ? 'refuse' : 'unpinned'
 }

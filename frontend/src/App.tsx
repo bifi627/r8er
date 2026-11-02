@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth'
 import { auth } from './firebase'
 import { getMe } from './api'
-import { Devices } from './features/devices/Devices'
+import { Gateways } from './features/gateways/Gateways'
 
 function SignIn() {
   const [email, setEmail] = useState('')
@@ -74,7 +74,7 @@ function Shell({ user }: { user: User }) {
         </button>
       </header>
       <p style={{ color: '#888', fontSize: 12 }}>tenant {tenantId}</p>
-      <Devices />
+      <Gateways />
     </main>
   )
 }

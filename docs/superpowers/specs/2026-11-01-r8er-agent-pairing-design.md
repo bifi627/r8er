@@ -1,5 +1,7 @@
 # r8er — Agent onboarding + device pairing (MVP items 2 + 3) — design
 
+> **Vocabulary note (2026-11-02):** written before the rename (TECH_DEBT T9). "Agent" / `Device` / `devices` here = **gateway** / `Gateway` / `gateways` today; a "browser device" and its "device key" = **client** / client key; `/agents/*` and `/devices` routes = `/gateways/*`, `/gateways`; `R8ER_SERVER_URL` = `R8ER_API_URL`. Current contract: `docs/protocol.md`.
+
 Date: 2026-11-01 · Status: draft for owner review
 Supersedes the pairing mechanics sketched in the implementation plan (item 2:
 "QR with claim code + fingerprint") — see "Changes vs the plan" below.
@@ -105,7 +107,7 @@ Non-goals (out of scope here):
   (item 6). *In:* removing a paired browser from the agent page's list.
 - Auto-update, Compose packaging, published agent image (item 4).
 - Certificate rotation — rotation = re-onboard / re-pair for now; automatic
-  rollover over the pinned channel is planned for item 4 (TECH_DEBT.md "Agent cert has no rotation").
+  rollover over the pinned channel is planned for item 4 (TECH_DEBT.md "Gateway cert has no rotation").
 - Fixing the served-JavaScript limit (below) — documented only.
 
 Anti-goals (failure even if it "works"):
