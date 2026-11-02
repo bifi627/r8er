@@ -48,7 +48,9 @@ local gateway page (Host/Origin guard), Gateways list. **PR B (broker + pairing)
 tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto client key,
 session-bound connection auth, commit/reveal comparison code approved on the gateway
 page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
-**Next: item 4** (productized gateway).
+**Next: item 5** (streaming client, consumption-only — no Jellyfin management). Item 4 (productized gateway: compose
+install, auto-update, status page) deferred 2026-11-02 — dev runs the Go binary
+directly; pick it up before the first non-owner install.
 
 **Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
 tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
