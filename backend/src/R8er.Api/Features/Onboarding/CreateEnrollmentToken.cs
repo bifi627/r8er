@@ -3,7 +3,7 @@ using R8er.Api.Data;
 
 namespace R8er.Api.Features.Onboarding;
 
-/// "Add agent": mint a one-time enrollment token for the caller's tenant and the
+/// "Add gateway": mint a one-time enrollment token for the caller's tenant and the
 /// install command that carries it.
 public static class CreateEnrollmentToken
 {
@@ -11,7 +11,7 @@ public static class CreateEnrollmentToken
 
     public static void Map(IEndpointRouteBuilder app)
     {
-        app.MapPost("/agents/enrollment-tokens", async (ClaimsPrincipal user, R8erDbContext db, HttpContext ctx, IConfiguration cfg, CancellationToken ct) =>
+        app.MapPost("/gateways/enrollment-tokens", async (ClaimsPrincipal user, R8erDbContext db, HttpContext ctx, IConfiguration cfg, CancellationToken ct) =>
         {
             var token = Secrets.New(16);   // 128 bit
             var expiresAt = DateTimeOffset.UtcNow + Lifetime;
@@ -25,11 +25,11 @@ public static class CreateEnrollmentToken
 
             // ponytail: R8ER_PUBLIC_URL when set (prod, behind Railway's proxy), else the
             // URL this request came in on (dev: http://localhost:5028).
-            var serverUrl = (cfg["R8ER_PUBLIC_URL"] ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}").TrimEnd('/');
-            // Dev form (from agent/); the docker run / Compose form arrives with item 4's image.
-            var installCommand = $"R8ER_SERVER_URL={serverUrl} R8ER_ENROLL_TOKEN={token} go run ./cmd/agent";
+            var apiUrl = (cfg["R8ER_PUBLIC_URL"] ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}").TrimEnd('/');
+            // Dev form (from gateway/); the docker run / Compose form arrives with item 4's image.
+            var installCommand = $"R8ER_API_URL={apiUrl} R8ER_ENROLL_TOKEN={token} go run ./cmd/gateway";
             var installCommandPowershell =
-                $"$env:R8ER_SERVER_URL='{serverUrl}'; $env:R8ER_ENROLL_TOKEN='{token}'; go run ./cmd/agent";
+                $"$env:R8ER_API_URL='{apiUrl}'; $env:R8ER_ENROLL_TOKEN='{token}'; go run ./cmd/gateway";
             return Results.Ok(new { token, expiresAt, installCommand, installCommandPowershell });
         }).RequireAuthorization();
     }

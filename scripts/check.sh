@@ -14,13 +14,13 @@ npm run lint --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
 
-echo "== agent: fmt + vet + build + test =="
+echo "== gateway: fmt + vet + build + test =="
 if command -v go >/dev/null 2>&1; then
-  (cd agent && test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
+  (cd gateway && test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
    go vet ./... && go build ./... && go test ./...)
 else
   # ponytail: Go absent on the primary Windows machine; CI still runs it
-  echo "!! SKIPPED: go not installed locally — agent is UNVERIFIED here, CI will run it" >&2
+  echo "!! SKIPPED: go not installed locally — gateway is UNVERIFIED here, CI will run it" >&2
 fi
 
 echo "== e2e: golden path (Docker + Chrome; first time: npm ci + npx playwright install chrome in e2e/) =="

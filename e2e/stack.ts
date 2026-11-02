@@ -68,16 +68,16 @@ export function freePort() {
 }
 
 /**
- * Runs the agent binary built in global setup. stateDir survives stop/start
+ * Runs the gateway binary built in global setup. stateDir survives stop/start
  * (that's the cert-swap step); the token is only needed for the first run.
  */
-export async function startAgent(
+export async function startGateway(
   stateDir: string,
   env: Record<string, string>,
 ) {
   const port = await freePort()
   const pageUrl = `http://127.0.0.1:${port}`
-  const p = start('agent', process.env.E2E_AGENT_BIN!, [], {
+  const p = start('gateway', process.env.E2E_GATEWAY_BIN!, [], {
     cwd: root,
     env: {
       R8ER_STATE_DIR: stateDir,

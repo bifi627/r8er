@@ -11,8 +11,8 @@
 </style>
 
 <h1>r8er tunnel — range passthrough proof</h1>
-<p>Start the agent (origin = local Jellyfin), then Connect. This opens one data
-channel per HTTP request, tunnels it to the agent's origin, and checks that a
+<p>Start the gateway (origin = local Jellyfin), then Connect. This opens one data
+channel per HTTP request, tunnels it to the gateway's origin, and checks that a
 full GET and a ranged GET come back intact — i.e. <b>seek survives the tunnel</b>.</p>
 
 <label>Signaling URL
@@ -32,7 +32,7 @@ const log = (m, cls) => {
 };
 
 // tunnelFetch: one data channel per request. Send the request as a text frame;
-// the agent replies with a text head frame {status, headers} then binary body
+// the gateway replies with a text head frame {status, headers} then binary body
 // chunks, then closes the channel (close == body EOF). Mirrors docs/protocol.md.
 function tunnelFetch(pc, url, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -59,7 +59,7 @@ function tunnelFetch(pc, url, opts = {}) {
   });
 }
 
-// case-insensitive header lookup (agent forwards Jellyfin's original casing)
+// case-insensitive header lookup (gateway forwards Jellyfin's original casing)
 const h = (headers, name) => {
   const k = Object.keys(headers).find(k => k.toLowerCase() === name.toLowerCase());
   return k ? headers[k] : undefined;

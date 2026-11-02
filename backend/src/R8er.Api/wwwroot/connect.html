@@ -2,7 +2,7 @@
 <meta charset="utf-8" />
 <title>r8er POC — connectivity spike (step 6)</title>
 <!-- Throwaway dev harness (file:// or served from the backend). Connects to the
-     agent through signaling, measures agent→browser throughput on the same
+     gateway through signaling, measures gateway→browser throughput on the same
      "throughput" data channel step 3 uses, reads RTCStats to classify the
      negotiated path (direct vs relay, IPv4/v6, candidate types, RTT), and POSTs
      one telemetry row per session to the backend. This is the Checkpoint-1
@@ -28,7 +28,7 @@
 </style>
 
 <h1>r8er — connectivity spike</h1>
-<p>Start the agent, then Connect. Tag the network you're on (e.g. "pixel-cellular",
+<p>Start the gateway, then Connect. Tag the network you're on (e.g. "pixel-cellular",
 "cafe-wifi"). Fill TURN creds to enable relay; tick <b>force relay</b> to prove the
 relay path. Every run logs one row to the telemetry backend.</p>
 
@@ -222,7 +222,7 @@ $("go").onclick = () => {
   };
   let tick;
   dc.onopen = () => {
-    log("throughput channel open — agent flooding ~15s");
+    log("throughput channel open — gateway flooding ~15s");
     lastT = t0 = performance.now();
     tick = setInterval(() => {
       const now = performance.now();

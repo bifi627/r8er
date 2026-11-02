@@ -1,26 +1,26 @@
 Feature: Signaling broker
-  A browser reaches agents of its own tenant only, and an agent can only answer
+  A browser reaches gateways of its own tenant only, and a gateway can only answer
   sessions opened for it. The broker relays signaling; it never decides trust.
 
-  Scenario: An offer reaches the tenant's own agent and the answer comes back
-    Given "alice@home.test" has an online agent "nas"
-    When "alice@home.test" offers to agent "nas"
-    Then agent "nas" receives the offer
-    When agent "nas" answers that session
+  Scenario: An offer reaches the tenant's own gateway and the answer comes back
+    Given "alice@home.test" has an online gateway "nas"
+    When "alice@home.test" offers to gateway "nas"
+    Then gateway "nas" receives the offer
+    When gateway "nas" answers that session
     Then the browser receives the answer
 
-  Scenario: A browser cannot reach another tenant's agent
-    Given "alice@home.test" has an online agent "nas"
-    When "bob@home.test" offers to agent "nas"
-    Then the browser is told the agent is offline or unknown
-    And agent "nas" receives nothing
+  Scenario: A browser cannot reach another tenant's gateway
+    Given "alice@home.test" has an online gateway "nas"
+    When "bob@home.test" offers to gateway "nas"
+    Then the browser is told the gateway is offline or unknown
+    And gateway "nas" receives nothing
 
-  Scenario: An agent cannot answer another agent's session, even knowing its id
-    Given "alice@home.test" has an online agent "nas"
-    And "bob@home.test" has an online agent "evil"
-    When "alice@home.test" offers to agent "nas"
-    And agent "nas" receives the offer
-    And agent "evil" answers that session
+  Scenario: A gateway cannot answer another gateway's session, even knowing its id
+    Given "alice@home.test" has an online gateway "nas"
+    And "bob@home.test" has an online gateway "evil"
+    When "alice@home.test" offers to gateway "nas"
+    And gateway "nas" receives the offer
+    And gateway "evil" answers that session
     Then the browser receives nothing
 
   Scenario: A browser socket without a valid ID token is closed

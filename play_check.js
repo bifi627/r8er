@@ -7,7 +7,7 @@ const log = (m, cls) => { $("log").insertAdjacentHTML("beforeend", (cls ? `<span
 window.addEventListener("error", e => log(`JS error: ${e.message}${e.filename ? ` @${e.filename}:${e.lineno}` : ""}`, "fail"));
 window.addEventListener("unhandledrejection", e => log(`unhandled rejection: ${e.reason && e.reason.message || e.reason}`, "fail"));
 log(`page loaded · ${location.href}`);
-log(`UA: ${navigator.userAgent}`);
+log(`UA: ${navigator.userGateway}`);
 log(`hls.js: ${window.Hls ? (Hls.isSupported() ? "loaded, MSE supported" : "loaded but MSE NOT supported (iOS Safari?)") : "FAILED TO LOAD — CDN blocked? no subtitles/video without it"}`, window.Hls && Hls.isSupported() ? "pass" : "fail");
 
 // hash convenience: #item=…&key=…&subs=…&signal=…&turn=…&user=…&cred=… — keeps the
@@ -231,24 +231,24 @@ $("go").onclick = () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       ws.send(JSON.stringify({ type: "offer", sdp: pc.localDescription }));
-      log("offer sent — waiting for the agent's answer…");
+      log("offer sent — waiting for the gateway's answer…");
     } catch (err) { log("offer failed: " + err.message, "fail"); }
   };
   ws.onmessage = async ev => {
     let m; try { m = JSON.parse(ev.data); } catch { log("unparseable signaling msg: " + ev.data, "fail"); return; }
-    if (m.type === "answer") { gotAnswer = true; log("answer received — agent is in the room", "pass"); await pc.setRemoteDescription(m.sdp); }
+    if (m.type === "answer") { gotAnswer = true; log("answer received — gateway is in the room", "pass"); await pc.setRemoteDescription(m.sdp); }
     else if (m.type === "ice") { remoteCands++; try { await pc.addIceCandidate(m.candidate); } catch (err) { log("addIceCandidate: " + err.message, "fail"); } }
     else log("signaling msg: " + m.type);
   };
   ws.onerror = () => log("signaling socket error (backend deployed? URL reachable?)", "fail");
-  ws.onclose = e => log(`signaling closed (code ${e.code}${e.reason ? ", " + e.reason : ""})${connected ? "" : " — before connecting; room full or agent absent?"}`, connected ? null : "fail");
+  ws.onclose = e => log(`signaling closed (code ${e.code}${e.reason ? ", " + e.reason : ""})${connected ? "" : " — before connecting; room full or gateway absent?"}`, connected ? null : "fail");
 
   // Watchdog: a silent hang is the worst phone outcome — name the likely cause.
   setTimeout(() => {
     if (connected) return;
     log(`STILL NOT CONNECTED after 20s:`, "fail");
     log(`  signaling=${["connecting","open","closing","closed"][ws.readyState]}, ice=${pc.iceConnectionState}, ` +
-        `answer=${gotAnswer ? "yes" : "NO — agent not answering (running? first peer in room 'poc'?)"}, ` +
+        `answer=${gotAnswer ? "yes" : "NO — gateway not answering (running? first peer in room 'poc'?)"}, ` +
         `localICE=${localCands}, remoteICE=${remoteCands}`);
   }, 20000);
 };

@@ -99,7 +99,7 @@ public sealed class IntegrationFixture : IAsyncLifetime
             using var scope = Factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<R8erDbContext>();
             await db.Database.ExecuteSqlRawAsync(
-                "TRUNCATE devices, users, tenants RESTART IDENTITY CASCADE;");
+                "TRUNCATE gateways, users, tenants RESTART IDENTITY CASCADE;");
         }
     }
 }

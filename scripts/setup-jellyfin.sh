@@ -5,7 +5,7 @@
 # key, and prints a ready-to-play HLS URL for the 10-minute seek clip.
 #
 # ponytail: throwaway dev tooling — hardcoded creds, no error recovery beyond
-# "fail loud". Not product code; the agent owns the real Jellyfin key in MVP.
+# "fail loud". Not product code; the gateway owns the real Jellyfin key in MVP.
 #
 #   bash scripts/setup-jellyfin.sh
 #
@@ -79,13 +79,13 @@ done
 ITEM_ID="${ITEM_ID:-$FIRST_ID}"
 [ -n "$ITEM_ID" ] || { echo "scan produced no movie items"; exit 1; }
 
-echo "== 7/7 minting agent API key =="
-curl -fsS -X POST "$BASE/Auth/Keys?app=r8er-agent" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
+echo "== 7/7 minting gateway API key =="
+curl -fsS -X POST "$BASE/Auth/Keys?app=r8er-gateway" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
 API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const k=(JSON.parse(s).Items||[]).find(x=>x.AppName==="r8er-agent");process.stdout.write(k?k.AccessToken:"")})')
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const k=(JSON.parse(s).Items||[]).find(x=>x.AppName==="r8er-gateway");process.stdout.write(k?k.AccessToken:"")})')
 [ -n "$API_KEY" ] || API_KEY="$TOKEN"   # fall back to the session token
 
-# Persist for the harness / agent. Git-ignored: throwaway dev creds.
+# Persist for the harness / gateway. Git-ignored: throwaway dev creds.
 OUT="dev/.jellyfin.json"
 node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],JSON.stringify({base:process.argv[2],user:process.argv[3],userId:process.argv[4],token:process.argv[5],apiKey:process.argv[6],longItemId:process.argv[7],p1080ItemId:process.argv[8]||null,subtitleIndex:process.argv[9]||null,hevcItemId:process.argv[10]||null},null,2)+"\n")' \
   "$OUT" "$BASE" "$USER_NAME" "$USER_ID" "$TOKEN" "$API_KEY" "$ITEM_ID" "$P1080_ID" "$SUB_IDX" "$HEVC_ID"

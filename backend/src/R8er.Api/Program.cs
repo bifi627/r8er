@@ -7,7 +7,7 @@ using R8er.Api;
 using R8er.Api.Auth;
 using R8er.Api.Data;
 using R8er.Api.Features.Broker;
-using R8er.Api.Features.Devices;
+using R8er.Api.Features.Gateways;
 using R8er.Api.Features.Me;
 using R8er.Api.Features.Onboarding;
 using R8er.Api.Features.Poc;
@@ -98,10 +98,10 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 // Vertical slices: one file per use case under Features/<Slice>/, mapped here.
 await PocEndpoints.MapAsync(app, connString);
 GetMe.Map(app);
-ListDevices.Map(app);
+ListGateways.Map(app);
 CreateEnrollmentToken.Map(app);
 Enroll.Map(app);
-AgentSocket.Map(app);
+GatewaySocket.Map(app);
 BrowserSocket.Map(app);
 
 app.Run();

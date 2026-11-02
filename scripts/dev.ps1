@@ -1,22 +1,22 @@
 # Run r8er locally in one command: Firebase Auth emulator (Docker) + backend + frontend.
 #
 #   powershell -File scripts/dev.ps1              # Ctrl+C stops the frontend AND the backend window
-#   powershell -File scripts/dev.ps1 -ResetAgent  # also wipe agent/r8er-state (= brand-new agent, re-onboard)
+#   powershell -File scripts/dev.ps1 -ResetGateway  # also wipe gateway/r8er-state (= brand-new gateway, re-onboard)
 #
-# Agent (separate terminal, from agent/): web app -> Add agent -> run the shown
-# command. More agents on one machine: give each its own R8ER_STATE_DIR + R8ER_PAGE_PORT.
+# Gateway (separate terminal, from gateway/): web app -> Add gateway -> run the shown
+# command. More gateways on one machine: give each its own R8ER_STATE_DIR + R8ER_PAGE_PORT.
 #
 # Database: whatever the backend is configured with (user-secrets / env), e.g. a
 # Railway dev instance. Only when no connection string is set does this also start
 # the compose Postgres (the backend's built-in fallback). Auth is always the emulator.
-param([switch]$ResetAgent)
+param([switch]$ResetGateway)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
-if ($ResetAgent -and (Test-Path agent/r8er-state)) {
-    Remove-Item -Recurse -Force agent/r8er-state
-    Write-Host 'Agent state wiped -> next agent start needs a fresh enrollment token.' -ForegroundColor Yellow
+if ($ResetGateway -and (Test-Path gateway/r8er-state)) {
+    Remove-Item -Recurse -Force gateway/r8er-state
+    Write-Host 'Gateway state wiped -> next gateway start needs a fresh enrollment token.' -ForegroundColor Yellow
 }
 
 docker info *> $null
