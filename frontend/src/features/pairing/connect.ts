@@ -56,9 +56,11 @@ export async function connect(
 
     ws.onopen = () => send({ type: 'auth', token })
     ws.onclose = () => fail(new Error('broker connection closed'))
-    // Handle broker messages strictly in order: an ICE candidate must not race
-    // ahead of the answer's setRemoteDescription.
+    // Handle broker messages strictly in order. The gateway can still trickle a
+    // candidate before its answer (Pion gathers during SetLocalDescription), so
+    // candidates that beat the answer wait in `early`.
     let queue = Promise.resolve()
+    const early: RTCIceCandidateInit[] = []
     ws.onmessage = (e) => {
       queue = queue.then(() => onBroker(JSON.parse(e.data))).catch(fail)
     }
@@ -79,8 +81,10 @@ export async function connect(
             ),
           )
         await pc.setRemoteDescription(m.sdp)
+        for (const c of early.splice(0)) await pc.addIceCandidate(c)
       } else if (m.type === 'ice') {
-        await pc.addIceCandidate(m.candidate)
+        if (pc.remoteDescription) await pc.addIceCandidate(m.candidate)
+        else early.push(m.candidate)
       } else if (m.type === 'error') {
         fail(new Error(m.error))
       }
