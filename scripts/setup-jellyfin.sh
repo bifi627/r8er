@@ -53,9 +53,9 @@ USER_ID=$(printf '%s' "$AUTH" | jget User.Id)
 
 echo "== 5/7 adding dev-media library (/media) + scanning =="
 curl -fsS -X POST "$BASE/Library/VirtualFolders?name=dev-media&collectionType=movies&refreshLibrary=true" \
-  -H "X-Emby-Token: $TOKEN" -H 'Content-Type: application/json' \
+  -H "Authorization: MediaBrowser Token=\"$TOKEN\"" -H 'Content-Type: application/json' \
   -d '{"LibraryOptions":{"PathInfos":[{"Path":"/media"}]}}' >/dev/null
-curl -fsS -X POST "$BASE/Library/Refresh" -H "X-Emby-Token: $TOKEN" >/dev/null || true
+curl -fsS -X POST "$BASE/Library/Refresh" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
 
 echo "== 6/7 waiting for the scan to index the clips =="
 # Select by file Path, not Name: Jellyfin's online metadata matcher collapses
@@ -68,7 +68,7 @@ echo "== 6/7 waiting for the scan to index the clips =="
 ITEM_ID=""; P1080_ID=""; SUB_IDX=""; HEVC_ID=""; FIRST_ID=""
 for i in $(seq 1 90); do
   ITEMS=$(curl -fsS "$BASE/Items?Recursive=true&IncludeItemTypes=Movie&userId=$USER_ID&Fields=Path,MediaStreams" \
-    -H "X-Emby-Token: $TOKEN")
+    -H "Authorization: MediaBrowser Token=\"$TOKEN\"")
   eval "$(printf '%s' "$ITEMS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const its=(JSON.parse(s).Items||[]);const byPath=re=>its.find(i=>re.test(i.Path||""));const long=byPath(/h264-aac-long/i)||byPath(/long/i);const p=byPath(/1080p/i);const hevc=byPath(/hevc/i);const sub=p&&(p.MediaStreams||[]).find(x=>x.Type==="Subtitle");process.stdout.write(`ITEM_ID=${long?long.Id:""}\nP1080_ID=${p?p.Id:""}\nSUB_IDX=${sub?sub.Index:""}\nHEVC_ID=${hevc?hevc.Id:""}\nFIRST_ID=${its[0]?its[0].Id:""}\n`)})')"
   # Done once the last-to-scan 1080p clip is in; also stop if there's simply no
   # 1080p fixture on disk (long is in and the item count has settled).
@@ -80,8 +80,8 @@ ITEM_ID="${ITEM_ID:-$FIRST_ID}"
 [ -n "$ITEM_ID" ] || { echo "scan produced no movie items"; exit 1; }
 
 echo "== 7/7 minting agent API key =="
-curl -fsS -X POST "$BASE/Auth/Keys?app=r8er-agent" -H "X-Emby-Token: $TOKEN" >/dev/null || true
-API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "X-Emby-Token: $TOKEN" \
+curl -fsS -X POST "$BASE/Auth/Keys?app=r8er-agent" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
+API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const k=(JSON.parse(s).Items||[]).find(x=>x.AppName==="r8er-agent");process.stdout.write(k?k.AccessToken:"")})')
 [ -n "$API_KEY" ] || API_KEY="$TOKEN"   # fall back to the session token
 
@@ -101,7 +101,7 @@ echo "  hevc+ac3:   ${HEVC_ID:-<none — run gen-test-media.sh then re-run>} (fo
 echo "  wrote:      $OUT"
 echo
 echo "HLS URL to play through the tunnel (origin-relative):"
-echo "  /Videos/$ITEM_ID/master.m3u8?mediaSourceId=$ITEM_ID&deviceId=r8er-poc&api_key=$API_KEY&videoCodec=h264&audioCodec=aac"
+echo "  /Videos/$ITEM_ID/master.m3u8?mediaSourceId=$ITEM_ID&deviceId=r8er-poc&ApiKey=$API_KEY&videoCodec=h264&audioCodec=aac"
 if [ -n "$P1080_ID" ]; then
   echo
   echo "Phone play URL (1080p + subs over the away path) — open on the phone:"

@@ -15,7 +15,7 @@ services:
 
   jellyfin:
     # Pinned deliberately — never `latest`. Update the pin consciously.
-    image: jellyfin/jellyfin:10.10.7
+    image: jellyfin/jellyfin:12.4.20261026-211555
     ports:
       - "8096:8096"
     volumes:

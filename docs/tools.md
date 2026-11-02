@@ -8,7 +8,7 @@ Version pins live in `docker-compose.yml`; bump them with the `deps-bump` skill.
 
 | Tool | What it is | Problem it solves in r8er | Dev | Prod |
 |---|---|---|---|---|
-| **Jellyfin** | Open-source media server | Media engine on the user's hardware: library scan, serving, transcoding codecs the browser can't play (HEVC/AC3). The agent tunnels its HTTP over WebRTC, so we never write a transcoder. **Pinned image, never `latest`.** | compose (`jellyfin/jellyfin:10.10.7`) | User's NAS/PC, bundled with the agent |
+| **Jellyfin** | Open-source media server | Media engine on the user's hardware: library scan, serving, transcoding codecs the browser can't play (HEVC/AC3). The agent tunnels its HTTP over WebRTC, so we never write a transcoder. **Pinned image, never `latest`.** | compose (`jellyfin/jellyfin:12.4.20261026-211555`) | User's NAS/PC, bundled with the agent |
 | **Pion** (Go agent) | WebRTC stack in Go | Agent side of the tunnel. *(A library, listed because it's the core tunnel engine.)* | native `go run` | User's NAS/PC |
 | **STUN** (Google) | Public address discovery | Lets peers learn their public IP:port for direct hole-punching (86% of POC sessions). Hardcoded `stun:stun.l.google.com:19302` in the agent. | same | same |
 | **coturn** | Open-source TURN server | Local relay so the TURN fallback path can be forced and tested at a desk (`iceTransportPolicy: 'relay'`). | compose `--profile relay` | — |
