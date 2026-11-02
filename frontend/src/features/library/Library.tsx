@@ -1,0 +1,237 @@
+// Library browsing over the tunnel (MVP item 5, consumption only). Functional,
+// not pretty: the UI is refactored later. ponytail: a useState view stack, no
+// router; browser Back is out of scope (add history.pushState if it annoys).
+import { useEffect, useState } from 'react'
+import { connect, PinMismatch, type Session } from '../pairing/connect'
+import { tunnelFetch, tunnelJson } from '../../tunnel'
+import { Player } from './Player'
+import { clock, TICKS_PER_SECOND, type Item } from './items'
+
+type Page = { Items: Item[] }
+type View =
+  | { kind: 'home' }
+  | { kind: 'folder'; item: Item }
+  | { kind: 'series'; item: Item }
+  | { kind: 'season'; item: Item }
+
+const playable = (i: Item) =>
+  !i.IsFolder && i.Type !== 'Series' && i.Type !== 'Season'
+
+export function Library({
+  gatewayId,
+  onClose,
+}: {
+  gatewayId: string
+  onClose: () => void
+}) {
+  const [session, setSession] = useState<Session | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [stack, setStack] = useState<View[]>([{ kind: 'home' }])
+  const [playing, setPlaying] = useState<Item | null>(null)
+
+  useEffect(() => {
+    let s: Session | null = null
+    let gone = false
+    connect(gatewayId).then(
+      (x) => (gone ? x.close() : setSession((s = x))),
+      (e: Error) =>
+        setErr(
+          e instanceof PinMismatch
+            ? `Refused: this is not the gateway you paired with. ${e.message}`
+            : e.message,
+        ),
+    )
+    return () => {
+      gone = true
+      s?.close()
+    }
+  }, [gatewayId])
+
+  const view = stack[stack.length - 1]
+  const open = (i: Item) => {
+    if (playable(i)) return setPlaying(i)
+    const kind =
+      i.Type === 'Series' ? 'series' : i.Type === 'Season' ? 'season' : 'folder'
+    setStack([...stack, { kind, item: i }])
+  }
+
+  return (
+    <section>
+      <p>
+        <button type="button" onClick={onClose}>
+          ← Gateways
+        </button>{' '}
+        {stack.map((v, n) => (
+          <span key={n}>
+            {' / '}
+            <a
+              href="#"
+              onClick={(e) => (
+                e.preventDefault(),
+                setPlaying(null),
+                setStack(stack.slice(0, n + 1))
+              )}
+            >
+              {v.kind === 'home' ? 'Library' : v.item.Name}
+            </a>
+          </span>
+        ))}
+      </p>
+      {err && <p style={{ color: 'crimson' }}>{err}</p>}
+      {!session && !err && <p>Connecting…</p>}
+      {session && playing && (
+        <Player
+          pc={session.pc}
+          item={playing}
+          onExit={() => setPlaying(null)}
+        />
+      )}
+      {session && !playing && (
+        <Listing key={stack.length} pc={session.pc} view={view} onOpen={open} />
+      )}
+    </section>
+  )
+}
+
+function Listing({
+  pc,
+  view,
+  onOpen,
+}: {
+  pc: RTCPeerConnection
+  view: View
+  onOpen: (i: Item) => void
+}) {
+  const [rows, setRows] = useState<[string, Item[]][] | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    const get = (url: string) => tunnelJson<Page>(pc, url).then((p) => p.Items)
+    const load: Promise<[string, Item[]][]> =
+      view.kind === 'home'
+        ? Promise.all([
+            get('/UserItems/Resume?mediaTypes=Video&limit=12'),
+            get('/UserViews'),
+          ]).then(([resume, views]) => [
+            ['Continue watching', resume],
+            ['Libraries', views],
+          ])
+        : view.kind === 'series'
+          ? get(`/Shows/${view.item.Id}/Seasons`).then((s) => [['Seasons', s]])
+          : view.kind === 'season'
+            ? get(
+                `/Shows/${view.item.SeriesId}/Episodes?seasonId=${view.item.Id}`,
+              ).then((e) => [['Episodes', e]])
+            : get(`/Items?parentId=${view.item.Id}&sortBy=SortName`).then(
+                (i) => [['', i]],
+              )
+    load.then(setRows, (e: Error) => setErr(e.message))
+  }, [pc, view])
+
+  if (err) return <p style={{ color: 'crimson' }}>{err}</p>
+  if (!rows) return <p>Loading…</p>
+  return (
+    <>
+      {rows.map(
+        ([title, items]) =>
+          (items.length > 0 || title === '') && (
+            <div key={title}>
+              {title && <h3>{title}</h3>}
+              {items.length === 0 && <p>Nothing here.</p>}
+              <ul
+                style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                  gap: 12,
+                }}
+              >
+                {items.map((i) => (
+                  <li key={i.Id}>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(i)}
+                      style={{ width: '100%', textAlign: 'left' }}
+                    >
+                      <Poster pc={pc} item={i} />
+                      <div>
+                        {i.IndexNumber != null &&
+                          i.Type === 'Episode' &&
+                          `${i.IndexNumber}. `}
+                        {i.Name}
+                        {i.ProductionYear && ` (${i.ProductionYear})`}
+                      </div>
+                      <small>{label(i)}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ),
+      )}
+    </>
+  )
+}
+
+function label(i: Item) {
+  if (!playable(i)) return i.Type
+  const pos = i.UserData?.PlaybackPositionTicks ?? 0
+  if (i.UserData?.Played) return 'Watched'
+  return pos > 0 ? `Resume ${clock(pos / TICKS_PER_SECOND)}` : 'Play'
+}
+
+// Posters come through the tunnel too, as blob URLs. ponytail: at most 4 image
+// channels in flight; lazy-load with IntersectionObserver if big libraries hurt.
+let active = 0
+const waiting: (() => void)[] = []
+async function limited<T>(fn: () => Promise<T>) {
+  if (active >= 4) await new Promise<void>((r) => waiting.push(r))
+  active++
+  try {
+    return await fn()
+  } finally {
+    active--
+    waiting.shift()?.()
+  }
+}
+
+function Poster({ pc, item }: { pc: RTCPeerConnection; item: Item }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const tag = item.ImageTags?.Primary
+  useEffect(() => {
+    if (!tag) return
+    let url: string | null = null
+    let gone = false
+    limited(() =>
+      tunnelFetch(
+        pc,
+        `/Items/${item.Id}/Images/Primary?maxWidth=280&tag=${tag}`,
+      ),
+    ).then(
+      (r) => {
+        if (gone || r.status !== 200) return
+        url = URL.createObjectURL(
+          new Blob([r.body], { type: r.headers['Content-Type'] }),
+        )
+        setSrc(url)
+      },
+      () => {},
+    )
+    return () => {
+      gone = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [pc, item.Id, tag])
+  return (
+    <div style={{ aspectRatio: '2 / 3', background: '#ddd' }}>
+      {src && (
+        <img
+          src={src}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      )}
+    </div>
+  )
+}

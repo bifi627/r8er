@@ -20,7 +20,11 @@ export default defineConfig({
     launchOptions: {
       // Headless Chrome hides host ICE candidates behind mDNS .local names;
       // runners may not resolve them. Both peers are on this host anyway.
-      args: ['--disable-features=WebRtcHideLocalIpsWithMdns'],
+      // Autoplay: the player calls play() after loading; no user gesture here.
+      args: [
+        '--disable-features=WebRtcHideLocalIpsWithMdns',
+        '--autoplay-policy=no-user-gesture-required',
+      ],
     },
   },
 })

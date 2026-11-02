@@ -18,13 +18,20 @@ import (
 
 	"r8er/gateway/internal/identity"
 	"r8er/gateway/internal/pairing"
+	"r8er/gateway/internal/tunnel"
 )
 
 // A browser (played by a second Pion peer) is refused tunnel channels until it
 // pairs; after Approve on the "local page" a tunneled GET goes through, and a
 // fresh session with the same key is let straight in.
 func TestPairThenTunnel(t *testing.T) {
-	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("jellyfin")) }))
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/Users" {
+			w.Write([]byte(`[{"Name":"home","Id":"0123456789abcdef0123456789abcdef"}]`))
+			return
+		}
+		w.Write([]byte("jellyfin"))
+	}))
 	defer origin.Close()
 	dir := t.TempDir()
 	cert, fp, err := identity.LoadOrCreate(dir)
@@ -32,7 +39,8 @@ func TestPairThenTunnel(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, _ := pairing.Open(dir)
-	gateway := &Sessions{Cert: cert, Fp: fp, Store: store, Client: http.DefaultClient, Origin: origin.URL}
+	gateway := &Sessions{Cert: cert, Fp: fp, Store: store,
+		Jellyfin: &tunnel.Jellyfin{Client: http.DefaultClient, URL: origin.URL, Key: "k"}}
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	b := connect(t, gateway, "s1", key, false)
@@ -150,12 +158,12 @@ func (b *browser) say(v map[string]any) map[string]any {
 	}
 }
 
-// fetch opens a tunnel channel for GET / and returns the body ("" if refused).
+// fetch opens a tunnel channel for an allowlisted GET and returns the body ("" if refused).
 func (b *browser) fetch() string {
 	d, _ := b.pc.CreateDataChannel("req", nil)
 	body := make(chan string, 1)
 	var got []byte
-	d.OnOpen(func() { d.SendText(`{"method":"GET","url":"/"}`) })
+	d.OnOpen(func() { d.SendText(`{"method":"GET","url":"/System/Info/Public"}`) })
 	d.OnMessage(func(m webrtc.DataChannelMessage) {
 		if !m.IsString {
 			got = append(got, m.Data...)

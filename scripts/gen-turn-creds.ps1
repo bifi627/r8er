@@ -1,13 +1,12 @@
 <#
 .SYNOPSIS
-  Mint short-lived Cloudflare Realtime TURN credentials for the POC step-6b
-  connectivity spike, and print everything ready to paste.
+  Mint short-lived Cloudflare Realtime TURN credentials for the gateway, and
+  print the env vars ready to paste. (PR B moves minting into the API.)
 
 .DESCRIPTION
   Calls Cloudflare's generate-ice-servers endpoint with your TURN key, saves the
   full iceServers response to dev/.cloudflare-turn.json (git-ignored), and emits:
     - the gateway env vars (start the home gateway with TURN enabled)
-    - a bookmarkable phone harness URL (creds pre-filled, natural direct/relay)
   Throwaway dev tooling: creds expire (default 24h); re-run to refresh.
 
 .EXAMPLE
@@ -19,8 +18,7 @@
 param(
   [string]$KeyId,
   [string]$ApiToken,
-  [int]$Ttl = 86400,                                   # 24h field-test window
-  [string]$RailwayBase = "https://r8er.up.railway.app" # served harness + signaling
+  [int]$Ttl = 86400 # 24h field-test window
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,7 +53,6 @@ if (-not $turn) { Write-Host "No TURN entry with credentials in response." -Fore
 $urls     = @($turn.urls) -join ","
 $user     = $turn.username
 $cred     = $turn.credential
-$enc      = { param($s) [uri]::EscapeDataString($s) }
 
 Write-Host "`n=== ICE servers ===" -ForegroundColor Cyan
 $resp.iceServers | ConvertTo-Json -Depth 6
@@ -63,16 +60,8 @@ $resp.iceServers | ConvertTo-Json -Depth 6
 # --- Gateway env (run the home gateway with Cloudflare TURN) --------------------
 Write-Host "`n=== Home gateway (PowerShell) ===" -ForegroundColor Cyan
 Write-Host @"
-`$env:R8ER_SIGNAL_URL   = "$($RailwayBase -replace '^http','ws')/signaling/poc"
 `$env:R8ER_ICE_URLS     = "$urls"
 `$env:R8ER_ICE_USERNAME = "$user"
 `$env:R8ER_ICE_CREDENTIAL = "$cred"
 go run ./cmd/gateway      # from the gateway/ directory
 "@
-
-# --- Phone harness URL (natural direct-vs-relay; edit the note per location) -
-$hash = "note=REPLACE-ME&turn=$(& $enc $urls)&user=$(& $enc $user)&cred=$(& $enc $cred)"
-Write-Host "`n=== Phone harness URL (bookmark; change note= per network) ===" -ForegroundColor Cyan
-Write-Host "$RailwayBase/connect.html#$hash"
-Write-Host "`n  (Local test before deploy: swap the base for http://localhost:5028)" -ForegroundColor DarkGray
-Write-Host "  (Add '&relay=1' once to sanity-check the relay path over Cloudflare.)" -ForegroundColor DarkGray

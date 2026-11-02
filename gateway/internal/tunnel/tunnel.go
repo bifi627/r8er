@@ -1,7 +1,8 @@
 // Package tunnel is the HTTP-over-data-channel primitive (docs/protocol.md,
 // "Tunnel framing"): one data channel per request, response head as a text
 // frame, body as ~16KB binary chunks under bufferedAmount backpressure, channel
-// close = EOF. Byte-transparent: forwards headers verbatim, never recompresses.
+// close = EOF. Media bytes pass through untouched (never recompressed); the
+// Jellyfin policy (jellyfin.go) decides what may pass and redacts the API key.
 package tunnel
 
 import (
@@ -40,31 +41,34 @@ func Gate(d *webrtc.DataChannel) func() {
 	}
 }
 
-// tunnelReq is the browser→gateway request frame (docs/protocol.md). Body-less:
-// the POC only tunnels GETs (playlists, segments, ranged reads).
+// tunnelReq is the browser→gateway request frame (docs/protocol.md).
 type tunnelReq struct {
 	Method  string            `json:"method"`
-	URL     string            `json:"url"` // origin-relative, e.g. "/web/index.html"
+	URL     string            `json:"url"` // origin-relative, e.g. "/Items?parentId=…"
 	Headers map[string]string `json:"headers"`
+	Body    string            `json:"body,omitempty"` // small JSON (POST), ≤ MaxBody
 }
 
 // Serve treats the channel's first message as an HTTP request, proxies it
-// to origin, and streams the response back. One channel == one request/response;
+// to Jellyfin, and streams the response back. One channel == one request/response;
 // closing the channel is the body's EOF marker for the browser.
-func Serve(d *webrtc.DataChannel, client *http.Client, origin string) {
+func Serve(d *webrtc.DataChannel, j *Jellyfin) {
 	var once sync.Once
 	d.OnMessage(func(m webrtc.DataChannelMessage) {
-		once.Do(func() { go handleReq(d, client, origin, m.Data) })
+		once.Do(func() { go handleReq(d, j, m.Data) })
 	})
 }
 
-func handleReq(d *webrtc.DataChannel, client *http.Client, origin string, raw []byte) {
+func handleReq(d *webrtc.DataChannel, j *Jellyfin, raw []byte) {
 	defer d.Close()
 
-	status, hdr, body, err := proxy(client, origin, raw)
+	status, hdr, body, err := proxy(j, raw)
 	if err != nil {
 		log.Printf("gateway: tunnel: %v", err)
-		sendHead(d, http.StatusBadGateway, nil)
+		if status == 0 {
+			status = http.StatusBadGateway
+		}
+		sendHead(d, status, nil)
 		return
 	}
 	defer body.Close()
@@ -74,36 +78,39 @@ func handleReq(d *webrtc.DataChannel, client *http.Client, origin string, raw []
 	log.Printf("gateway: tunnel -> %d", status)
 }
 
-// proxy is the tunnel's pure core: decode the request frame, call origin
-// forwarding headers (Range included, so seek survives), and hand back the
-// response status/headers/body for the caller to stream. No WebRTC here, so
-// range passthrough is unit-tested directly (tunnel_test.go).
-func proxy(client *http.Client, origin string, raw []byte) (int, map[string]string, io.ReadCloser, error) {
+// proxy is the tunnel's pure core: decode the request frame, apply the
+// Jellyfin policy, call Jellyfin forwarding headers (Range included, so seek
+// survives), and hand back the response status/headers/body for the caller to
+// stream. No WebRTC here, so it is unit-tested directly (tunnel_test.go). On
+// error, a non-zero status is the refusal to send (403, 413, 503).
+func proxy(j *Jellyfin, raw []byte) (int, map[string]string, io.ReadCloser, error) {
 	var rq tunnelReq
 	if err := json.Unmarshal(raw, &rq); err != nil {
-		return 0, nil, nil, fmt.Errorf("bad request frame: %w", err)
+		return http.StatusBadRequest, nil, nil, fmt.Errorf("bad request frame: %w", err)
 	}
-	req, err := http.NewRequest(rq.Method, origin+rq.URL, nil)
+	req, status, err := j.prepare(rq)
 	if err != nil {
-		return 0, nil, nil, err
+		return status, nil, nil, err
 	}
-	for k, v := range rq.Headers {
-		req.Header.Set(k, v)
-	}
-	resp, err := client.Do(req)
+	resp, err := j.Client.Do(req)
 	if err != nil {
 		return 0, nil, nil, err
 	}
 	hdr := make(map[string]string, len(resp.Header)+1)
 	for k := range resp.Header {
-		hdr[k] = resp.Header.Get(k) // ponytail: last value wins; POC has no dup headers that matter
+		hdr[k] = resp.Header.Get(k) // ponytail: last value wins; Jellyfin sends no dup headers that matter
 	}
 	// Go's Transport promotes Content-Length out of Header into resp.ContentLength;
 	// re-add it so the browser (and hls.js) knows the body size. -1 = unknown.
 	if resp.ContentLength >= 0 {
 		hdr["Content-Length"] = strconv.FormatInt(resp.ContentLength, 10)
 	}
-	return resp.StatusCode, hdr, resp.Body, nil
+	body, err := j.redact(hdr, resp.Body)
+	if err != nil {
+		resp.Body.Close()
+		return 0, nil, nil, err
+	}
+	return resp.StatusCode, hdr, body, nil
 }
 
 func sendHead(d *webrtc.DataChannel, status int, headers map[string]string) {

@@ -6,11 +6,11 @@
 //	pairing     client-key auth, comparison code, allowlist + pending approvals
 //	sessions    brokered browser sessions: auth channel, gated tunnel
 //	localpage   the gateway's page on the home LAN (approve / remove browsers)
-//	tunnel      HTTP over data channels (the streaming primitive)
-//	poc         Phase-0 room signaling session (deleted by item 5)
+//	tunnel      HTTP over data channels to Jellyfin (allowlist, key injection)
 //
-// Config (env): R8ER_API_URL, R8ER_ENROLL_TOKEN, R8ER_STATE_DIR,
-// R8ER_PAGE_PORT, R8ER_LAN_URL, R8ER_ORIGIN; POC: R8ER_SIGNAL_URL, R8ER_ICE_*.
+// Config (env): R8ER_API_URL (required), R8ER_ENROLL_TOKEN, R8ER_STATE_DIR,
+// R8ER_PAGE_PORT, R8ER_LAN_URL, R8ER_ORIGIN, R8ER_JELLYFIN_API_KEY,
+// R8ER_JELLYFIN_USER, R8ER_ICE_*.
 package main
 
 import (
@@ -28,8 +28,8 @@ import (
 	"r8er/gateway/internal/localpage"
 	"r8er/gateway/internal/onboarding"
 	"r8er/gateway/internal/pairing"
-	"r8er/gateway/internal/poc"
 	"r8er/gateway/internal/sessions"
+	"r8er/gateway/internal/tunnel"
 )
 
 func main() {
@@ -44,19 +44,29 @@ func main() {
 	log.Printf("gateway: state %s, DTLS fingerprint %s", stateDir, fp)
 
 	// No Client.Timeout: it caps the whole body read, which would abort a long
-	// stream mid-movie. ponytail: POC leaks a goroutine on a hung origin; a
+	// stream mid-movie. ponytail: leaks a goroutine on a hung origin; a
 	// per-request context with a header-only deadline is the upgrade path.
 	// DisableCompression: a tunnel must be byte-transparent. Go's default
 	// transport auto-adds Accept-Encoding: gzip, then silently decompresses —
 	// which rewrites the body and drops Content-Length. Forward exactly what the
 	// browser asked for and hand back exactly what the origin sent.
-	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
-	origin := env("R8ER_ORIGIN", "http://localhost:8096") // local Jellyfin
+	jf := &tunnel.Jellyfin{
+		Client: &http.Client{Transport: &http.Transport{DisableCompression: true}},
+		URL:    env("R8ER_ORIGIN", "http://localhost:8096"), // local Jellyfin
+		Key:    os.Getenv("R8ER_JELLYFIN_API_KEY"),
+		User:   os.Getenv("R8ER_JELLYFIN_USER"),
+	}
+	if jf.Key == "" {
+		log.Printf("gateway: R8ER_JELLYFIN_API_KEY not set — pairing works, playback refused (create a key in the Jellyfin dashboard)")
+	}
 
-	// MVP onboarding: enroll once, then heartbeat over the authenticated control
-	// socket and serve the local page.
+	// Enroll once, then heartbeat over the authenticated control socket and
+	// serve the local page.
 	api := strings.TrimRight(os.Getenv("R8ER_API_URL"), "/")
-	if api != "" {
+	if api == "" {
+		log.Fatal("gateway: R8ER_API_URL not set (use the install command from the web app)")
+	}
+	{
 		st, err := onboarding.LoadOrEnroll(ctx, stateDir, api, os.Getenv("R8ER_ENROLL_TOKEN"), fp)
 		if err != nil {
 			log.Fatalf("gateway: %v", err)
@@ -72,7 +82,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("gateway: allowlist: %v", err)
 		}
-		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Client: client, Origin: origin}
+		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Jellyfin: jf}
 		var online atomic.Bool
 		go func() {
 			log.Printf("gateway: local page on %s", lan)
@@ -84,15 +94,6 @@ func main() {
 		})
 	}
 
-	// POC room signaling (until item 5 replaces it): runs when no control plane
-	// is configured, or when R8ER_SIGNAL_URL is set explicitly alongside it.
-	if signalURL := os.Getenv("R8ER_SIGNAL_URL"); api == "" || signalURL != "" {
-		signalURL = env("R8ER_SIGNAL_URL", "wss://r8er.up.railway.app/signaling/poc")
-		log.Printf("gateway: dialing %s (tunnel origin %s)", signalURL, origin)
-		go forever(ctx, func(ctx context.Context) error {
-			return poc.RunSession(ctx, signalURL, origin, client, cert)
-		})
-	}
 	<-ctx.Done()
 }
 

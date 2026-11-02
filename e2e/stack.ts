@@ -84,6 +84,7 @@ export async function startGateway(
       R8ER_PAGE_PORT: String(port),
       R8ER_LAN_URL: pageUrl,
       R8ER_ORIGIN: process.env.E2E_JELLYFIN_URL!,
+      R8ER_JELLYFIN_API_KEY: process.env.E2E_JELLYFIN_API_KEY!,
       ...env,
     },
   })

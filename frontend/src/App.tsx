@@ -66,7 +66,7 @@ function Shell({ user }: { user: User }) {
   }, [])
 
   return (
-    <main style={{ maxWidth: 480, margin: '4rem auto' }}>
+    <main style={{ maxWidth: 960, margin: '2rem auto', padding: '0 1rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span>{user.email}</span>
         <button type="button" onClick={() => signOut(auth)}>

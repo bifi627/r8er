@@ -145,26 +145,6 @@ export async function connect(
   })
 }
 
-/** Tunnel framing (docs/protocol.md): one data channel per request. */
-export function tunnelFetch(pc: RTCPeerConnection, url: string) {
-  return new Promise<{ status: number; body: Blob }>((resolve, reject) => {
-    const dc = pc.createDataChannel(`req:${url}`)
-    dc.binaryType = 'arraybuffer'
-    let status = 0
-    const chunks: ArrayBuffer[] = []
-    dc.onopen = () =>
-      dc.send(JSON.stringify({ method: 'GET', url, headers: {} }))
-    dc.onmessage = (e) => {
-      if (typeof e.data === 'string') status = JSON.parse(e.data).status
-      else chunks.push(e.data)
-    }
-    dc.onclose = () =>
-      status
-        ? resolve({ status, body: new Blob(chunks) })
-        : reject(new Error('tunnel refused'))
-  })
-}
-
 function browserName() {
   const ua = navigator.userAgent
   const b = /Edg\//.test(ua)
