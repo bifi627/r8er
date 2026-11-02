@@ -5,11 +5,11 @@ using R8er.Api.Data;
 namespace R8er.Api.Features.Connections;
 
 /// Connection telemetry, start: the client reports the selected ICE candidate
-/// pair once the tunnel is up. Only the caller's own gateways (global filter).
+/// pair once the tunnel is up, or a failed attempt with its reason. Only the caller's own gateways (global filter).
 public static class StartConnection
 {
     public record Request(Guid GatewayId, bool Relay, bool Ipv6, string? LocalCandidateType,
-        string? RemoteCandidateType, string? Protocol);
+        string? RemoteCandidateType, string? Protocol, string? Failure = null);
 
     public static void Map(IEndpointRouteBuilder app)
     {
@@ -28,6 +28,7 @@ public static class StartConnection
                 LocalCandidateType = Clip(rq.LocalCandidateType),
                 RemoteCandidateType = Clip(rq.RemoteCandidateType),
                 Protocol = Clip(rq.Protocol),
+                Failure = Clip(rq.Failure, 64),
             };
             db.ConnectionSessions.Add(row);
             await db.SaveChangesAsync(ct);
@@ -36,8 +37,8 @@ public static class StartConnection
     }
 
     // Client-supplied strings: keep them short.
-    private static string? Clip(string? s)
+    private static string? Clip(string? s, int max = 16)
     {
-        return s is { Length: > 16 } ? s[..16] : s;
+        return s is { Length: var n } && n > max ? s[..max] : s;
     }
 }

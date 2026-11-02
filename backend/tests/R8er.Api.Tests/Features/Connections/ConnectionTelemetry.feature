@@ -9,6 +9,11 @@ Feature: Connection telemetry
     And "alice@home.test" ends that session with 5000 bytes received
     Then the session is stored as relayed with 5000 bytes received and an end time
 
+  Scenario: A failed attempt is logged with its reason
+    Given "alice@home.test" owns a gateway named "alice-nas"
+    When "alice@home.test" logs a failed attempt on "alice-nas" because "ice failed"
+    Then the session is stored as failed because "ice failed"
+
   Scenario: A tenant cannot log a session on another tenant's gateway
     Given "alice@home.test" owns a gateway named "alice-nas"
     When "bob@home.test" starts a relayed session on "alice-nas"

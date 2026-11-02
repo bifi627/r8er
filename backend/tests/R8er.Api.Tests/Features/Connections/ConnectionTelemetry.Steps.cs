@@ -64,6 +64,23 @@ public class ConnectionTelemetrySteps(IntegrationFixture fx)
         }
     }
 
+    [When("\"(.*)\" logs a failed attempt on \"(.*)\" because \"(.*)\"")]
+    public async Task WhenFails(string email, string gateway, string reason)
+    {
+        using var client = await SignIn(email);
+        _last = await client.PostAsJsonAsync("/connections", new { gatewayId = _gateways[gateway], failure = reason });
+    }
+
+    [Then("the session is stored as failed because \"(.*)\"")]
+    public async Task ThenFailed(string reason)
+    {
+        Assert.Equal(HttpStatusCode.OK, _last?.StatusCode);
+        using var scope = fx.Factory.Services.CreateScope();
+        var row = await AllSessions(scope.ServiceProvider.GetRequiredService<R8erDbContext>()).SingleAsync();
+        Assert.Equal(reason, row.Failure);
+        Assert.Null(row.LocalCandidateType);
+    }
+
     [When("\"(.*)\" ends that session with ([0-9]+) bytes received")]
     public async Task WhenEnds(string email, long bytes)
     {

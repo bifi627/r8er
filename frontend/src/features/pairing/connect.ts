@@ -48,9 +48,12 @@ export async function connect(
       ? 'relay'
       : 'all',
   })
-  // Connection telemetry: one row per session that got a tunnel, totals on
-  // close. ponytail: a closed tab skips the end PATCH (row keeps EndedAt null).
+  // Connection telemetry: one row per attempt. A tunnel that came up gets its
+  // ICE pair now and totals on close; a failed one gets its reason. ponytail: a
+  // closed tab skips the end PATCH (row keeps EndedAt null), and so does a tab
+  // closed mid-connect (no row at all).
   let logged: Promise<string | null> | null = null
+  let settled = false
   const teardown = () => {
     pc.close()
     ws.close() // the broker tells the gateway `bye`
@@ -75,6 +78,7 @@ export async function connect(
       .finally(teardown)
   }
   const up = (): Session => {
+    settled = true
     logged = pc
       .getStats()
       .then((s) => {
@@ -99,6 +103,16 @@ export async function connect(
 
   return new Promise<Session>((resolve, reject) => {
     const fail = (e: Error) => {
+      if (!settled) {
+        settled = true
+        void authed('/connections', {
+          method: 'POST',
+          body: JSON.stringify({
+            gatewayId,
+            failure: e instanceof PinMismatch ? 'pin mismatch' : e.message,
+          }),
+        }).catch(() => {})
+      }
       close()
       reject(e)
     }
@@ -141,6 +155,9 @@ export async function connect(
         fail(new Error(m.error))
       }
     }
+    pc.onconnectionstatechange = () =>
+      pc.connectionState === 'failed' &&
+      fail(new Error('ICE failed: no direct or relayed route to the gateway'))
     pc.onicecandidate = (e) =>
       e.candidate && send({ type: 'ice', candidate: e.candidate.toJSON() })
 

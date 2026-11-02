@@ -72,6 +72,9 @@ pair from `getStats()` and calls `POST /connections`
 `{id}`; on close, `PATCH /connections/{id}` `{bytesReceived, bytesSent}` (stamps
 `EndedAt`). Rows live in `connection_sessions` (tenant-owned, global filter;
 another tenant's gateway or row → `404`). A closed tab skips the PATCH.
+A failed attempt (ICE `failed`, pin mismatch, unpaired, broker or gateway
+closed, refused) posts `{gatewayId, failure}` instead: candidate fields null,
+`failure` = the reason (≤ 64 chars). Rate queries: `failure IS NULL` = up.
 `relay` = either selected candidate is a relay. Chrome can report a relayed
 local candidate as `prflx`; only relay candidates carry `relayProtocol`, so
 that counts too. The same reading drives the player's privacy indicator

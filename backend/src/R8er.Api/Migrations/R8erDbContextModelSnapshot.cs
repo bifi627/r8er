@@ -73,6 +73,9 @@ namespace R8er.Api.Migrations
                     b.Property<DateTimeOffset?>("EndedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Failure")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("GatewayId")
                         .HasColumnType("uuid");
 

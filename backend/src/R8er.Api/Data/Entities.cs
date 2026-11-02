@@ -57,4 +57,5 @@ public class ConnectionSession : ITenantOwned
     public long? BytesSent { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }
+    public string? Failure { get; set; }                // null = tunnel came up; else why the attempt failed (no pair: Relay/types unset)
 }
