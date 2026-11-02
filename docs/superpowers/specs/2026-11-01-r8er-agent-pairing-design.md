@@ -1,6 +1,6 @@
 # r8er — Agent onboarding + device pairing (MVP items 2 + 3) — design
 
-> **Vocabulary note (2026-11-02):** written before the rename (TECH_DEBT T9). "Agent" / `Device` / `devices` here = **gateway** / `Gateway` / `gateways` today; a "browser device" and its "device key" = **client** / client key; `/agents/*` and `/devices` routes = `/gateways/*`, `/gateways`. Current contract: `docs/protocol.md`.
+> **Vocabulary note (2026-11-02):** written before the rename (TECH_DEBT T9). "Agent" / `Device` / `devices` here = **gateway** / `Gateway` / `gateways` today; a "browser device" and its "device key" = **client** / client key; `/agents/*` and `/devices` routes = `/gateways/*`, `/gateways`; `R8ER_SERVER_URL` = `R8ER_API_URL`. Current contract: `docs/protocol.md`.
 
 Date: 2026-11-01 · Status: draft for owner review
 Supersedes the pairing mechanics sketched in the implementation plan (item 2:
