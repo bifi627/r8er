@@ -139,7 +139,7 @@ function startPlayback(pc) {
   if (!window.Hls || !Hls.isSupported()) { log("hls.js/MSE not supported in this browser", "fail"); return; }
 
   const master = `${TUNNEL_ORIGIN}/Videos/${item}/master.m3u8` +
-    `?mediaSourceId=${item}&deviceId=r8er-poc&api_key=${key}&videoCodec=h264&audioCodec=aac` +
+    `?mediaSourceId=${item}&deviceId=r8er-poc&ApiKey=${key}&videoCodec=h264&audioCodec=aac` +
     (subs ? `&SubtitleStreamIndex=${subs}&SubtitleMethod=Hls` : "");
   log("loading HLS through the tunnel: /Videos/" + item + "/master.m3u8" + (subs ? ` (subs idx ${subs})` : " (no subs)"));
 
