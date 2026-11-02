@@ -95,10 +95,6 @@ export default async function globalSetup() {
         ConnectionStrings__Default: `Host=${pg.getHost()};Port=${pg.getMappedPort(5432)};Database=r8er;Username=r8er;Password=dev`,
         FIREBASE_AUTH_EMULATOR_HOST: emulator,
         FIREBASE_PROJECT_ID: 'demo-r8er',
-        // ponytail: Program.cs adds user-secrets AFTER env vars, so a dev
-        // machine's secrets.json (Railway dev DB) would override the container.
-        // An empty APPDATA hides it (UserSecrets resolves APPDATA first on every OS).
-        APPDATA: fs.mkdtempSync(path.join(os.tmpdir(), 'r8er-e2e-appdata-')),
       },
     },
   )

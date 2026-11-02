@@ -22,7 +22,8 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 // EF Core control-plane store. Key mirrors .env.example (ConnectionStrings__Default);
 // falls back to the local compose Postgres. POC Telemetry.cs shares this string.
-builder.Configuration.AddUserSecrets<Program>();
+// User-secrets load via CreateBuilder in Development only, before env vars — so
+// ConnectionStrings__Default in the environment always wins.
 // Railway's Postgres hands out DATABASE_URL in URL form (postgres://u:p@host:port/db),
 // which Npgsql can't parse. Accept either a native key-value string OR a URL from any
 // of the usual keys, converting the URL case. ponytail: covers ConnectionStrings__Default
@@ -42,9 +43,8 @@ var firebaseProjectId = builder.Configuration["FIREBASE_PROJECT_ID"] ?? "demo-r8
 if (FirebaseApp.DefaultInstance is null)
 {
     var usingEmulator = !string.IsNullOrEmpty(builder.Configuration["FIREBASE_AUTH_EMULATOR_HOST"]);
-    // ponytail: read the env var directly, not via Configuration — a multi-line/JSON
-    // value plus provider ordering (UserSecrets appended at L22) can shadow it. Direct
-    // read is the source of truth for a container-injected secret.
+    // ponytail: read the env var directly, not via Configuration — the source of
+    // truth for a container-injected multi-line/JSON secret.
     var serviceAccountJson = (Environment.GetEnvironmentVariable("FIREBASE_SERVICE_ACCOUNT_JSON")
         ?? builder.Configuration["FIREBASE_SERVICE_ACCOUNT_JSON"])?.Trim();
     if (!usingEmulator && string.IsNullOrEmpty(serviceAccountJson))
