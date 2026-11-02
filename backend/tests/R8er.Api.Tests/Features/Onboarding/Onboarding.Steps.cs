@@ -22,12 +22,6 @@ public class OnboardingSteps(IntegrationFixture fx)
     private bool _refused;
     private readonly Dictionary<string, string> _credentials = new();
 
-    [BeforeScenario]
-    public Task Reset()
-    {
-        return fx.ResetAsync();
-    }
-
     private async Task<HttpClient> SignIn(string email)
     {
         var token = await TokenMinter.MintIdTokenAsync(fx.EmulatorHost, email, "password123");

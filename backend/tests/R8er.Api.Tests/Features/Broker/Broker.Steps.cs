@@ -19,12 +19,6 @@ public class BrokerSteps(IntegrationFixture fx)
     private WebSocket _browser = null!;
     private string _session = "";
 
-    [BeforeScenario]
-    public Task Reset()
-    {
-        return fx.ResetAsync();
-    }
-
     [AfterScenario]
     public void Close()
     {
