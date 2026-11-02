@@ -10,12 +10,6 @@ namespace R8er.Api.Tests.Features.Auth;
 [Binding]
 public class ProvisioningSteps(IntegrationFixture fx)
 {
-    [BeforeScenario]
-    public Task Reset()
-    {
-        return fx.ResetAsync();
-    }
-
     [When("a new user \"(.*)\" signs in")]
     public async Task WhenSignsIn(string email)
     {

@@ -13,12 +13,6 @@ public class TenantIsolationSteps(IntegrationFixture fx)
 {
     private JsonElement _lastList;
 
-    [BeforeScenario]
-    public Task Reset()
-    {
-        return fx.ResetAsync();
-    }
-
     private async Task<HttpClient> SignIn(string email)
     {
         var token = await TokenMinter.MintIdTokenAsync(fx.EmulatorHost, email, "password123");
