@@ -13,14 +13,6 @@ Emulator error-body parsing assumes an `error` JSON shape; a real HTTP failure
 
 **Pay down:** next time the token minter is touched, or if a test fails with a confusing parse error.
 
-### Wide-open CORS
-**Area:** control-plane / CORS
-
-POC carries wide-open CORS. Not a hole today (Bearer-header auth, no cookies) but
-must be scoped before public exposure.
-
-**Pay down:** before the first public/prod deploy.
-
 ### POC telemetry sink is raw Npgsql
 **Area:** control-plane / Features/Poc/Telemetry.cs
 

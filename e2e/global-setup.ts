@@ -83,6 +83,9 @@ export default async function globalSetup() {
   const apiPort = await freePort()
   const api = `http://127.0.0.1:${apiPort}`
   const apiDir = path.join(root, 'backend', 'src', 'R8er.Api')
+  // Picked before the backend starts: it's the backend's CORS allowlist entry.
+  const appPort = await freePort()
+  process.env.E2E_APP_URL = `http://127.0.0.1:${appPort}`
   const backend = start(
     'backend',
     'dotnet',
@@ -95,12 +98,11 @@ export default async function globalSetup() {
         ConnectionStrings__Default: `Host=${pg.getHost()};Port=${pg.getMappedPort(5432)};Database=r8er;Username=r8er;Password=dev`,
         FIREBASE_AUTH_EMULATOR_HOST: emulator,
         FIREBASE_PROJECT_ID: 'demo-r8er',
+        CORS_ORIGINS: process.env.E2E_APP_URL,
       },
     },
   )
 
-  const appPort = await freePort()
-  process.env.E2E_APP_URL = `http://127.0.0.1:${appPort}`
   const vite = start(
     'vite',
     process.execPath,
