@@ -19,3 +19,17 @@ switch (e.g. `-Lan`). Phone clicks through one cert warning. Gateway page
 phones against the Railway dev deployment (HTTPS).
 
 **When:** before the iOS device test / item 5 streaming client, whichever comes first.
+
+### Media management (library folders, rescan)
+**Area:** gateway / Jellyfin admin
+
+Item 5 is consumption-only (browse, play, seek, resume). Nothing in the plan
+owns Jellyfin setup (admin user, API key, library folders) or upkeep (add a
+folder, rescan, fix metadata) — implicitly item 4's job, which is deferred.
+Today: owner sets Jellyfin up once by hand in its own dashboard
+(`http://localhost:8096`). Plan: small admin section on the LAN-only gateway
+page (`:8097`) that drives Jellyfin's API — folder picker + rescan; stays
+local, so nothing sensitive crosses the control plane. Not in the r8er web app
+(remote admin = new attack surface).
+
+**When:** with item 4 (productized gateway), or once a non-owner household installs.
