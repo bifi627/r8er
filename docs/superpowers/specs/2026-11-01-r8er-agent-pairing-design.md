@@ -107,7 +107,7 @@ Non-goals (out of scope here):
   (item 6). *In:* removing a paired browser from the agent page's list.
 - Auto-update, Compose packaging, published agent image (item 4).
 - Certificate rotation — rotation = re-onboard / re-pair for now; automatic
-  rollover over the pinned channel is planned for item 4 (TECH_DEBT T12).
+  rollover over the pinned channel is planned for item 4 (TECH_DEBT.md "Gateway cert has no rotation").
 - Fixing the served-JavaScript limit (below) — documented only.
 
 Anti-goals (failure even if it "works"):
@@ -170,7 +170,7 @@ Anti-goals (failure even if it "works"):
     website and DNS rebinding).
 - **LAN URL**: first private non-loopback IPv4 + page port, overridable via
   `R8ER_LAN_URL` (needed inside Docker, where the container IP is useless).
-- Fixes the stale config names (TECH_DEBT T6) as part of the new config
+- Fixes the stale config names as part of the new config
   surface.
 - Verifies browser signatures with stdlib `crypto/ecdsa` (P-256). WebCrypto
   emits raw 64-byte `r‖s` (IEEE P1363), not ASN.1 — convert via `big.Int`
@@ -277,7 +277,7 @@ PeerConnection per session. Designed into the broker messages from PR B's start.
 | PR | Scope |
 |---|---|
 | **A — Onboarding (item 2)** | Migration #2, enrollment token + enroll endpoint, persistent agent cert + state dir, authenticated agent WS + heartbeat + LAN URL, Devices list online/offline + Open agent page, bare local agent page, dev knobs. POC room signaling untouched. |
-| **B — Broker + device pairing (item 3)** | Tenant-scoped broker with session routing (browser auth: Firebase token as first WS message, not a query param — keeps it out of logs), browser device key + connection auth, commit/reveal comparison code, approve on agent page, allowlist, pins enforced both directions, isolation tests. **Done** = a paired browser profile fetches one tunneled HTTP request through a pinned connection; an unpaired or wrong-pin peer is refused. Telemetry graduates to a tenant-scoped EF entity (TECH_DEBT T5) with the pinned session as its producer. |
+| **B — Broker + device pairing (item 3)** | Tenant-scoped broker with session routing (browser auth: Firebase token as first WS message, not a query param — keeps it out of logs), browser device key + connection auth, commit/reveal comparison code, approve on agent page, allowlist, pins enforced both directions, isolation tests. **Done** = a paired browser profile fetches one tunneled HTTP request through a pinned connection; an unpaired or wrong-pin peer is refused. Telemetry graduates to a tenant-scoped EF entity (TECH_DEBT.md "POC telemetry sink") with the pinned session as its producer. |
 
 **POC paths (my call):** `/signaling/{room}`, the POC agent mode, and the POC
 harness pages (`play.html`, `connect.html`, `dev/*.html`) stay **untouched
@@ -315,7 +315,7 @@ data, so they don't weaken the new flows. Item 5 deletes them; log it in
 
 `docs/protocol.md` (agent WS, enroll API, comparison code, pairing messages),
 `docs/tools.md` (enrollment token + agent credential: what they are, how to
-rotate = re-onboard), `CLAUDE.md` current state, `TECH_DEBT.md` (T5/T6 rows
+rotate = re-onboard), `CLAUDE.md` current state, `TECH_DEBT.md` (POC telemetry + stale config rows
 deleted when paid), plan item 2 text pointing here.
 
 ## Open risks / verify early

@@ -14,11 +14,13 @@ using R8er.Api.Features.Poc;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ponytail: the connect harness runs from file:// (origin "null") or a static
-// host and POSTs telemetry cross-origin. POC is open anyway (no auth/tenancy);
-// wide-open CORS is fine here and gets scoped when telemetry graduates.
+// CORS allowlist = the SPA origins (comma-separated CORS_ORIGINS; default = vite dev).
+// wwwroot harness pages are same-origin, the gateway isn't a browser, and WebSockets
+// ignore CORS (/broker/ws authenticates in-band), so only the SPA needs listing.
+var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:5173")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    p.WithOrigins(corsOrigins).WithHeaders("Authorization", "Content-Type").AllowAnyMethod()));
 
 // EF Core control-plane store. Key mirrors .env.example (ConnectionStrings__Default);
 // falls back to the local compose Postgres. POC Telemetry.cs shares this string.
@@ -84,11 +86,11 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<R8erDbContext>().Database.MigrateAsync();
 }
 
+app.UseCors(); // before auth, so preflights are answered without hitting it
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseWebSockets();
-app.UseCors();
 // Serves the connectivity harness (wwwroot/connect.html) so a phone can load it
 // same-origin over Railway — file:// is desktop-only. POC step 6b.
 app.UseStaticFiles();
