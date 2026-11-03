@@ -28,7 +28,7 @@ docker compose up -d jellyfin >/dev/null
 
 echo "== 2/7 waiting for Jellyfin to come up =="
 for i in $(seq 1 60); do
-  if curl -fsS "$BASE/System/Info/Public" >/dev/null 2>&1; then break; fi
+  if curl -fsS "$BASE/Startup/Configuration" >/dev/null 2>&1; then break; fi  # not /System/Info/Public: that answers before the API leaves 503
   sleep 1
   [ "$i" = 60 ] && { echo "jellyfin did not start"; exit 1; }
 done
