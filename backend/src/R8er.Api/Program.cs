@@ -88,6 +88,11 @@ using (var scope = app.Services.CreateScope())
     await scope.ServiceProvider.GetRequiredService<R8erDbContext>().Database.MigrateAsync();
 }
 
+// SPA: the prod image copies the Vite build into wwwroot (dev: vite serves it).
+// ponytail: no MapFallbackToFile — the SPA has no client-side routes yet.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseCors(); // before auth, so preflights are answered without hitting it
 app.UseAuthentication();
 app.UseAuthorization();
