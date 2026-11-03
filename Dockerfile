@@ -14,7 +14,8 @@ ARG VITE_FIREBASE_PROJECT_ID
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci
 COPY frontend/ ./
-RUN test -n "$VITE_FIREBASE_PROJECT_ID" || { echo "VITE_FIREBASE_PROJECT_ID build arg not set"; exit 1; }
+# Fail the build, not sign-in: firebase.ts would silently bake in demo-* fallbacks.
+RUN : "${VITE_FIREBASE_API_KEY:?build arg not set}" "${VITE_FIREBASE_AUTH_DOMAIN:?build arg not set}" "${VITE_FIREBASE_PROJECT_ID:?build arg not set}"
 RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
