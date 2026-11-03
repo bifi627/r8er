@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.git/
+dev-media/
+gateway/
+e2e/
+frontend/.env*

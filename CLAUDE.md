@@ -61,7 +61,9 @@ only an endpoint allowlist through, and redacts the key from playlists. All POC
 paths are deleted. **PR B (trust it):** `GET /turn` (Cloudflare creds in prod,
 `R8ER_TURN_*` coturn in dev), `connection_sessions` telemetry (migration #4, drops
 the POC's `poc_connectivity`), privacy indicator (direct vs relayed); `?relay`
-forces the relay path. Next: item 6 (hardening).
+forces the relay path. **Hosting:** the root `Dockerfile` builds the SPA into the
+API image (`wwwroot`, same origin, no CORS in prod); Railway Root Directory = repo root.
+Next: item 6 (hardening).
 
 **Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
 tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
