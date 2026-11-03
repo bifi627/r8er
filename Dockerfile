@@ -32,4 +32,10 @@ WORKDIR /app
 COPY --from=build /app .
 COPY --from=web /web/dist ./wwwroot
 # Railway injects $PORT; Program.cs binds 0.0.0.0:$PORT when it is present.
+# Railway terminates TLS at its proxy: honor X-Forwarded-Proto/-For so
+# Request.Scheme is https (the gateway install command embeds it).
+# ponytail: trusts the headers from any peer (only Railway's proxy can reach us);
+# fine while nothing keys on the client IP. Item 6 rate limiting must not trust
+# a client-spoofable X-Forwarded-For.
+ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 ENTRYPOINT ["dotnet", "R8er.Api.dll"]
