@@ -24,6 +24,7 @@ public class Gateway : ITenantOwned
     public string? DtlsFingerprint { get; set; }        // gateway's persistent DTLS cert, set at enrollment; pinned
     public string? CredentialHash { get; set; }    // SHA-256 hex of the gateway credential (never the plaintext)
     public string? LanUrl { get; set; }                 // gateway page on the home LAN, from heartbeat
+    public string? Version { get; set; }                // gateway release version, from heartbeat
     public DateTimeOffset? LastSeenAt { get; set; }      // heartbeat → online/offline
     public DateTimeOffset CreatedAt { get; set; }
 }

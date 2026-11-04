@@ -169,6 +169,9 @@ namespace R8er.Api.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Version")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CredentialHash")

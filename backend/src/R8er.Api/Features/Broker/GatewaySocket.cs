@@ -6,7 +6,7 @@ using R8er.Api.Features.Onboarding;
 namespace R8er.Api.Features.Broker;
 
 /// The gateway's control socket, authenticated by its credential (Bearer):
-/// heartbeats (last_seen_at + advertised LAN URL) and the gateway's half of
+/// heartbeats (last_seen_at + advertised LAN URL + version) and the gateway's half of
 /// brokered browser sessions (answer/ice back to the session's browser).
 public static class GatewaySocket
 {
@@ -44,9 +44,11 @@ public static class GatewaySocket
                     {
                         case "heartbeat":
                             var lanUrl = SafeLanUrl((string?)msg["lanUrl"]);
+                            var version = (string?)msg["version"] is { Length: <= 40 } v ? v : null;
                             await db.Gateways.Where(d => d.Id == gateway.Id).ExecuteUpdateAsync(s => s
                                 .SetProperty(d => d.LastSeenAt, DateTimeOffset.UtcNow)
-                                .SetProperty(d => d.LanUrl, lanUrl), ct);
+                                .SetProperty(d => d.LanUrl, lanUrl)
+                                .SetProperty(d => d.Version, version), ct);
                             break;
                         case "answer" or "ice":
                             // Only into sessions opened *for this gateway*: a gateway can't

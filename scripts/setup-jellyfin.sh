@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproducible dev Jellyfin setup. Wipes the throwaway Jellyfin config, re-runs
 # the startup wizard via the REST API with known dev creds, adds the dev-media
-# library, scans it, mints an API key, and prints the gateway env to use it.
+# library, scans it, mints an API key, and writes gateway/gateway.env for the dev gateway.
 #
 # ponytail: throwaway dev tooling — hardcoded creds, no error recovery beyond
 # "fail loud". Not product code (a real install creates the key in the
@@ -12,7 +12,7 @@
 # Requires: docker compose (jellyfin service), curl, node (JSON parsing).
 set -euo pipefail
 
-BASE="http://localhost:8096"
+BASE="http://localhost:18096"   # dev port (docker-compose.yml)
 USER_NAME="r8er"
 USER_PW="${JELLYFIN_DEV_PW:-r8erdev}"
 AUTH_HDR='MediaBrowser Client="r8er-setup", Device="setup", DeviceId="r8er-setup", Version="0.0.1"'
@@ -99,7 +99,8 @@ echo "  long clip:  $ITEM_ID"
 echo "  1080p+subs: ${P1080_ID:-<none — run gen-test-media.sh then re-run>} (subtitle index: ${SUB_IDX:-none})"
 echo "  hevc+ac3:   ${HEVC_ID:-<none — run gen-test-media.sh then re-run>} (forces transcode)"
 echo "  wrote:      $OUT"
-echo
-echo "Gateway env (the gateway injects this key; browsers never see it):"
-echo "  export R8ER_JELLYFIN_API_KEY=$API_KEY           # bash"
-echo "  \$env:R8ER_JELLYFIN_API_KEY = \"$API_KEY\"   # PowerShell"
+
+# The dev gateway (go run in gateway/) reads gateway/gateway.env: dev ports, so
+# an installed r8er on 8096/8097 can run alongside. Git-ignored.
+printf 'R8ER_ORIGIN=%s\nR8ER_PAGE_PORT=18097\nR8ER_JELLYFIN_API_KEY=%s\n' "$BASE" "$API_KEY" > gateway/gateway.env
+echo "  wrote:      gateway/gateway.env (dev gateway: Jellyfin origin, page :18097, API key)"

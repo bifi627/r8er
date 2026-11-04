@@ -130,11 +130,11 @@ public class OnboardingSteps(IntegrationFixture fx)
         Assert.True(_refused);
     }
 
-    [When("gateway \"(.*)\" heartbeats with LAN URL \"(.*)\"")]
-    public async Task WhenHeartbeat(string name, string lanUrl)
+    [When("gateway \"(.*)\" heartbeats with LAN URL \"(.*)\" and version \"(.*)\"")]
+    public async Task WhenHeartbeat(string name, string lanUrl, string version)
     {
         using var ws = await Connect(_credentials[name]);
-        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "heartbeat", lanUrl }));
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "heartbeat", lanUrl, version }));
         await ws.SendAsync(msg, WebSocketMessageType.Text, true, CancellationToken.None);
         await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);   // server finishes the frame first
     }
@@ -150,6 +150,12 @@ public class OnboardingSteps(IntegrationFixture fx)
         var d = await Gateway(email, name);
         Assert.True(d.GetProperty("online").GetBoolean());
         Assert.Equal(lanUrl, d.GetProperty("lanUrl").GetString());
+    }
+
+    [Then("\"(.*)\" sees \"(.*)\" at version \"(.*)\"")]
+    public async Task ThenVersion(string email, string name, string version)
+    {
+        Assert.Equal(version, (await Gateway(email, name)).GetProperty("version").GetString());
     }
 
     [Then("\"(.*)\" sees \"(.*)\" offline")]

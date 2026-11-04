@@ -40,7 +40,8 @@ var page = template.Must(template.New("page").Parse(`<!doctype html>
 <title>r8er gateway · {{.Name}}</title>
 <body style="font-family:system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem">
 <h1>r8er gateway · {{.Name}}</h1>
-<p>Control plane: <b>{{if .Online}}online{{else}}offline{{end}}</b></p>
+<p>Control plane: <b>{{if .Online}}online{{else}}offline{{end}}</b> · version <code>{{.Version}}</code></p>
+{{with .Update}}<p style="border:2px solid #06c;padding:.5rem 1rem">Update available: <b>{{.}}</b></p>{{end}}
 <p>Gateway id: <code>{{.GatewayID}}</code></p>
 <h2>Pairing requests</h2>
 {{range .Pending}}
@@ -61,11 +62,13 @@ var page = template.Must(template.New("page").Parse(`<!doctype html>
 
 // Handler renders the page and takes the Approve/Reject/Remove posts. Only
 // someone on the home LAN reaches it, and Guard stops other sites driving it.
-func Handler(name, gatewayID, fp string, online *atomic.Bool, store *pairing.Store) http.Handler {
+// update holds the update notice ("" = up to date), set by the release check.
+func Handler(name, gatewayID, fp, version string, online *atomic.Bool, update *atomic.Pointer[string], store *pairing.Store) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		page.Execute(w, map[string]any{
 			"Name": name, "GatewayID": gatewayID, "Fingerprint": fp, "Online": online.Load(),
+			"Version": version, "Update": *update.Load(),
 			"Pending": store.Pending(), "Paired": store.Paired(),
 		})
 	})
