@@ -10,7 +10,7 @@
 //
 // Config (env): R8ER_API_URL (required), R8ER_ENROLL_TOKEN, R8ER_STATE_DIR,
 // R8ER_PAGE_PORT, R8ER_LAN_URL, R8ER_ORIGIN, R8ER_JELLYFIN_API_KEY,
-// R8ER_JELLYFIN_USER, R8ER_ICE_*.
+// R8ER_JELLYFIN_USER, R8ER_ICE_* (R8ER_ICE_PORT: Docker, see sessions.NewAPI).
 package main
 
 import (
@@ -32,6 +32,9 @@ import (
 	"r8er/gateway/internal/tunnel"
 )
 
+// version is set at build time (-ldflags -X main.version=…; see Dockerfile).
+var version = "dev"
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -41,7 +44,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("gateway: certificate: %v", err)
 	}
-	log.Printf("gateway: state %s, DTLS fingerprint %s", stateDir, fp)
+	log.Printf("gateway: %s, state %s, DTLS fingerprint %s", version, stateDir, fp)
 
 	// No Client.Timeout: it caps the whole body read, which would abort a long
 	// stream mid-movie. ponytail: leaks a goroutine on a hung origin; a
@@ -82,7 +85,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("gateway: allowlist: %v", err)
 		}
-		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Jellyfin: jf}
+		webAPI, err := sessions.NewAPI()
+		if err != nil {
+			log.Fatalf("gateway: ICE: %v", err)
+		}
+		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Jellyfin: jf, API: webAPI}
 		var online atomic.Bool
 		go func() {
 			log.Printf("gateway: local page on %s", lan)

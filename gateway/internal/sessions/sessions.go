@@ -10,6 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -38,6 +40,34 @@ type Sessions struct {
 
 	mu  sync.Mutex
 	pcs map[string]*webrtc.PeerConnection
+	API *webrtc.API // from NewAPI; nil = Pion defaults
+}
+
+// NewAPI builds the one WebRTC API all sessions share. Native runs need
+// nothing (zero value = Pion defaults). In Docker the container's IPs are
+// useless to browsers, so R8ER_ICE_PORT pins host candidates to one UDP port
+// (published by compose) and the host's LAN IP — taken from R8ER_LAN_URL —
+// is advertised instead of the container's. srflx still gathers on ephemeral
+// ports through Docker's NAT (Pion has no srflx-over-mux hook in v4).
+func NewAPI() (*webrtc.API, error) {
+	var se webrtc.SettingEngine
+	port := os.Getenv("R8ER_ICE_PORT")
+	if port == "" {
+		return webrtc.NewAPI(), nil
+	}
+	conn, err := net.ListenPacket("udp4", ":"+port)
+	if err != nil {
+		return nil, err
+	}
+	se.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conn))
+	if u, err := url.Parse(os.Getenv("R8ER_LAN_URL")); err == nil && net.ParseIP(u.Hostname()) != nil {
+		if err := se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
+			External: []string{u.Hostname()}, AsCandidateType: webrtc.ICECandidateTypeHost,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return webrtc.NewAPI(webrtc.WithSettingEngine(se)), nil
 }
 
 // Handle processes one broker message; send writes JSON to the current control socket.
@@ -79,7 +109,11 @@ func (s *Sessions) Handle(raw []byte, send func(any)) {
 }
 
 func (s *Sessions) newPeer(id string, send func(any)) (*webrtc.PeerConnection, error) {
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
+	api := s.API
+	if api == nil {
+		api = webrtc.NewAPI()
+	}
+	pc, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers:   iceServers(),
 		Certificates: []webrtc.Certificate{*s.Cert}, // persistent: browsers pin it
 	})

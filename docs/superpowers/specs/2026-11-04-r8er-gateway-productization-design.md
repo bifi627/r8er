@@ -75,7 +75,7 @@ optional `COMPOSE_PROFILES=hwaccel` (adds the
 
 | Service | Image | Notes |
 |---|---|---|
-| `gateway` | `${R8ER_GATEWAY_IMAGE:-ghcr.io/bifi627/r8er-gateway:X.Y.Z}` | unprivileged; named volume `state`; `R8ER_ORIGIN=http://jellyfin:8096`; page `${R8ER_PAGE_PORT:-8097}:8097`, ICE `${R8ER_ICE_PORT:-8098}:8098/udp` |
+| `gateway` | `${R8ER_GATEWAY_IMAGE:-ghcr.io/bifi627/r8er-gateway:X.Y.Z}` | unprivileged; named volume `state`; `R8ER_ORIGIN=http://jellyfin:8096`; page `${R8ER_PAGE_PORT:-8097}:8097`, ICE `${R8ER_ICE_PORT:-8098}:${R8ER_ICE_PORT:-8098}/udp` (same number both sides: the advertised candidate carries the container-side port) |
 | `jellyfin` | `jellyfin/jellyfin:<pinned>` | named volumes `config`/`cache`; media mounts come from the override; dashboard `${R8ER_JELLYFIN_PORT:-8096}:8096` |
 | `updater` | `docker:<pinned>-cli` | Docker socket; mounts `r8er/` at `/r8er`; runs `deploy/update.sh` |
 
@@ -104,10 +104,10 @@ services:
   any (it can't know which folder is movies vs series).
 - Long syntax on purpose: the short `D:\Movies:/media/movies` form splits on
   the drive-letter colon.
-- **Windows path spike:** compose runs inside the (Linux) updater container,
-  where `D:\Movies` is not an absolute path. The installer likely has to write
-  Docker Desktop's host form (`/run/desktop/mnt/host/d/Movies`). Verify in the
-  ICE spike, alongside "updater recreates Jellyfin with its mounts intact".
+- **Windows paths (spike: verified):** plain `D:\Movies` in long syntax works
+  even though compose runs inside the Linux updater container. Docker Desktop
+  translates it, and so does `/run/desktop/mnt/host/d/Movies`. The installer
+  writes the plain form.
 - Updater validation (step 3) checks the **merged** result:
   `docker compose -f compose.yml.new -f compose.override.yml config -q`.
 
@@ -217,6 +217,28 @@ bumps get tested before stable. Both can mount the same media folder `:ro`.
 Protocol rule this implies: a stable gateway must keep working against
 whatever API it talks to (API changes stay backward-compatible with the
 oldest gateway still in the field).
+
+## Spike results (2026-11-04, Windows 10 + Docker Desktop 29.9)
+
+- **LAN direct from a container: works.** The e2e golden path passes with the
+  gateway as a container (`E2E_GATEWAY_IMAGE=r8er-gateway:dev npm test`):
+  pairing, "direct · r8er carried 0 bytes", forced relay, re-pair after cert
+  swap. The native path still passes too.
+- **Forced relay in the harness** needed the gateway to also allocate on the
+  e2e coturn, because coturn advertises `127.0.0.1`. This is harness-only;
+  Cloudflare TURN has public addresses.
+- **Updater semantics: verified.** A container started by compose on the
+  Windows host shows `Running` (not recreated) when compose later runs from
+  inside a `docker:cli` container. An image change recreates it with the named
+  volume's data and the media bind intact.
+- **Still open: cellular.** This needs the owner's phone against a reachable
+  API (Railway dev). srflx comes from ephemeral ports through Docker's NAT,
+  because Pion v4 doesn't hand srflx gathering to the mux.
+- **Known loss:** the Docker bridge has no IPv6, so a containerized gateway has
+  IPv4-only candidates. The feasibility doc calls IPv6 the main lever against
+  relay. Watch `connection_sessions` (ip family, relay rate) on dogfood
+  installs. Upgrade path: `network_mode: host` on Linux. That breaks
+  service-name DNS, so Jellyfin would need a localhost port.
 
 ## PR split
 

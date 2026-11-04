@@ -77,17 +77,68 @@ export async function startGateway(
 ) {
   const port = await freePort()
   const pageUrl = `http://127.0.0.1:${port}`
-  const p = start('gateway', process.env.E2E_GATEWAY_BIN!, [], {
-    cwd: root,
-    env: {
-      R8ER_STATE_DIR: stateDir,
-      R8ER_PAGE_PORT: String(port),
-      R8ER_LAN_URL: pageUrl,
-      R8ER_ORIGIN: process.env.E2E_JELLYFIN_URL!,
-      R8ER_JELLYFIN_API_KEY: process.env.E2E_JELLYFIN_API_KEY!,
-      ...env,
-    },
-  })
+  const gwEnv: Record<string, string> = {
+    R8ER_STATE_DIR: stateDir,
+    R8ER_PAGE_PORT: String(port),
+    R8ER_LAN_URL: pageUrl,
+    R8ER_ORIGIN: process.env.E2E_JELLYFIN_URL!,
+    R8ER_JELLYFIN_API_KEY: process.env.E2E_JELLYFIN_API_KEY!,
+    ...env,
+  }
+  const p = process.env.E2E_GATEWAY_IMAGE
+    ? await dockerGateway(process.env.E2E_GATEWAY_IMAGE, port, gwEnv)
+    : start('gateway', process.env.E2E_GATEWAY_BIN!, [], {
+        cwd: root,
+        env: gwEnv,
+      })
   await waitHttp(pageUrl, p)
   return { ...p, pageUrl }
+}
+
+/**
+ * E2E_GATEWAY_IMAGE=r8er-gateway:dev runs the gateway as the install does: in
+ * a container on a bridge network, ICE through one published UDP port with the
+ * host's address advertised (sessions.NewAPI). Same port number both sides —
+ * the advertised candidate carries the container-side port.
+ */
+async function dockerGateway(
+  image: string,
+  port: number,
+  env: Record<string, string>,
+): Promise<Proc> {
+  const name = `r8er-e2e-gateway-${port}`
+  const icePort = String(await freePort())
+  const viaHost = (u: string) => u.replace(/\/\/(127\.0\.0\.1|localhost)\b/, '//host.docker.internal')
+  const vars = {
+    ...env,
+    R8ER_STATE_DIR: '/state',
+    R8ER_PAGE_PORT: '8097',
+    R8ER_ICE_PORT: icePort,
+    R8ER_API_URL: viaHost(env.R8ER_API_URL),
+    R8ER_ORIGIN: viaHost(env.R8ER_ORIGIN),
+    // Harness-only: the e2e coturn advertises 127.0.0.1 relay addresses,
+    // which inside the container mean the container. The gateway allocates on
+    // the same coturn instead, so coturn relays to itself. Real TURN
+    // (Cloudflare) has public addresses and needs none of this.
+    R8ER_ICE_URLS: 'turn:host.docker.internal:3479?transport=udp',
+    R8ER_ICE_USERNAME: 'e2e',
+    R8ER_ICE_CREDENTIAL: 'e2e',
+  }
+  const p = start('gateway', 'docker', [
+    'run', '--rm', '--name', name,
+    '--add-host', 'host.docker.internal:host-gateway', // Linux CI; Docker Desktop has it
+    ...(process.getuid ? ['--user', String(process.getuid())] : []), // bind-mounted state dir
+    '-v', `${env.R8ER_STATE_DIR}:/state`,
+    '-p', `127.0.0.1:${port}:8097`,
+    '-p', `127.0.0.1:${icePort}:${icePort}/udp`,
+    ...Object.entries(vars).flatMap(([k, v]) => ['-e', `${k}=${v}`]),
+    image,
+  ], { cwd: root })
+  return {
+    proc: p.proc,
+    stop: async () => {
+      spawnSync('docker', ['rm', '-f', name]) // killing the CLI doesn't stop the container
+      await p.stop()
+    },
+  }
 }
