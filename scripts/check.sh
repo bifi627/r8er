@@ -8,6 +8,9 @@ echo "== backend: format + build + test =="
 dotnet format backend/R8er.slnx --verify-no-changes
 dotnet test backend/R8er.slnx --nologo
 
+# Fresh worktrees have no node_modules (gitignored); install from the lockfile once.
+for d in frontend e2e; do [ -d "$d/node_modules" ] || npm ci --prefix "$d"; done
+
 echo "== frontend: format + lint + test + typecheck + build =="
 npm run format:check --prefix frontend
 npm run lint --prefix frontend
@@ -23,7 +26,7 @@ else
   echo "!! SKIPPED: go not installed locally — gateway is UNVERIFIED here, CI will run it" >&2
 fi
 
-echo "== e2e: golden path (Docker + Chrome; first time: npm ci + npx playwright install chrome in e2e/) =="
+echo "== e2e: golden path (Docker + Chrome; no Chrome? npx playwright install chrome in e2e/) =="
 npm test --prefix e2e
 
 echo "== compose config =="
