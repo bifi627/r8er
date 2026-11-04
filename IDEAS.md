@@ -35,15 +35,13 @@ local, so nothing sensitive crosses the control plane. Not in the r8er web app
 **When:** with item 4 (productized gateway), or once a non-owner household installs.
 
 ### Nightly channel
-**Area:** gateway / deploy
+**Area:** gateway / release
 
-Prerelease updates for the owner's second installed copy. A channel = which
-`compose.yml` the updater fetches (`R8ER_UPDATE_URL`, shipped with item 4).
-Gateway-only nightly: CI publishes `r8er-gateway:nightly-<sha>` +
-`deploy/nightly/compose.yml` (served at `/install/nightly/compose.yml`).
-Whole-app nightly: a second Railway environment, install with `-Api <url>`.
-On the dev machine: own `COMPOSE_PROJECT_NAME` + ports, own Jellyfin config
-volume (nightly tests one-way Jellyfin bumps before stable). Detail: item 4
-spec, "Channels / nightly".
+Prerelease builds for the owner's second installed copy. Gateways update from
+GitHub Releases (item 4); `releases/latest` skips prereleases, so nightly =
+CI publishes `gateway-vX.Y.Z-nightly.<n>` as a prerelease and a nightly
+install follows prereleases instead of latest (one flag on the update check
+and install script). On the dev machine: another install dir with its own
+state, page port and Jellyfin. Detail: item 4 spec.
 
 **When:** once there are real users on stable worth protecting from untested builds.

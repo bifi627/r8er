@@ -1,263 +1,163 @@
 # r8er — Productized gateway (MVP item 4) — design
 
-Date: 2026-11-04 · Status: draft (sidecar-updater approach approved; details open)
+Date: 2026-11-04 · Status: draft v2. Pivoted from a Docker updater sidecar to
+native binaries plus update notices, after the spike below.
 
 ## Intent
 
 Get from "the owner runs `go run ./cmd/gateway` with hand-made env" to "a
-household runs one command and has a gateway + Jellyfin that stays current
-by itself". Linux Docker and Windows Docker Desktop, amd64 + arm64. Other
-platforms (Synology/unRAID packages, native Windows/Mac) on demand.
+household downloads one binary, runs one command, and is told when to
+update". The gateway runs **natively** on Windows, Linux and macOS (amd64 +
+arm64). Jellyfin comes either from its own installer or from an optional r8er
+compose file that pins a tested version.
 
-The owner's dev machine must be able to run **both**: a normal install
-(talking to prod, used daily) and the full dev stack, side by side, without
-either touching the other's state.
+The owner's dev machine must run the dev stack and one or more installed
+copies side by side.
+
+## Deviation from the implementation plan
+
+Plan item 4 says "**auto-update from day one**". This design ships
+**notify-only** updates: the gateway detects a new release and tells the user
+the one command to run. Accepted for dogfood (owner + 1–2 friends). It is the
+first thing to revisit before strangers install. Upgrade path: a scheduled
+task / systemd timer runs the same install script (no new mechanism).
+Recorded in the plan with a pointer here.
 
 ## Goals (acceptance criteria)
 
-1. **Image:** `ghcr.io/bifi627/r8er-gateway:<version>`, multi-arch, built by
-   CI from `gateway/`. Version baked in via `-ldflags`. Publishing is a
-   human-approved workflow run.
-2. **Install:** the web app's Add gateway shows one command (Linux `sh`,
-   Windows PowerShell) that creates an `r8er/` folder, writes `.env`, fetches
-   `compose.yml` from the API, and runs `docker compose up -d`. Result: an
-   enrolled gateway whose local page shows the comparison code.
-3. **No manual Jellyfin setup:** on first run the gateway completes the
-   Jellyfin startup wizard, creates the admin user (random password, kept in
-   the state dir, shown on the local page) and mints its API key. Libraries
-   are the user's call, in Jellyfin. `R8ER_JELLYFIN_API_KEY` still wins when set (dev, e2e).
-4. **Auto-update:** an updater sidecar applies a new published `compose.yml`
-   within 24h with no user action (see "Update lifecycle").
-5. **Version visible:** heartbeat carries the gateway version; the Gateways
-   list shows it (rollout progress at a glance).
-6. **Status page** (local page, `:8097`): version, API connected + last
-   heartbeat, Jellyfin reachable, last update check/result, Jellyfin admin
-   credentials, and a loud warning when no hardware transcode device is
-   present.
-7. **Structured logs:** `log/slog` JSON handler (stdlib).
-8. **Dev/install separation** holds (section below), proven by running both
-   on the owner's Windows machine at once.
-9. Reconnect after a gateway restart/update is exercised (Checkpoint 2).
+1. **Releases:** tag `gateway-vX.Y.Z` → CI builds `r8er-gateway-<os>-<arch>`
+   for windows/linux/darwin × amd64/arm64 (`go build`, version via
+   `-ldflags -X main.version`), plus `SHA256SUMS`, `install.sh`, `install.ps1`
+   and `jellyfin-compose.yml`, published as a GitHub Release with `gh release
+   create`. The tag push is the human approval. No new tools.
+2. **Install = update:** `install.ps1` / `install.sh` download the platform
+   binary from `releases/latest`, verify it against `SHA256SUMS`, put it in the
+   install dir, and (re)start it. First run takes the enrollment token from the
+   web app's Add gateway command. Later runs never touch the state dir, so
+   pairings survive updates.
+3. **Update notice:** at start and then daily, the gateway calls `GET
+   api.github.com/repos/bifi627/r8er/releases/latest`. If that tag is newer
+   than its own version, it logs `update available vA → vB` plus the install
+   command for its OS, and the status page shows the same. Failures are
+   logged once and ignored. A `dev` build skips the check.
+4. **Jellyfin key without manual steps:**
+   - Fresh Jellyfin (setup wizard not done, e.g. the r8er compose): the gateway
+     completes the wizard, creates the admin user (random password, kept in
+     the state dir and shown on the local page) and mints its API key.
+   - Jellyfin already set up: the local page asks once for a Jellyfin admin
+     login; the gateway mints a key with it and stores the key, not the
+     password.
+   - `R8ER_JELLYFIN_API_KEY` still wins (dev, e2e).
+5. **Optional Jellyfin compose** (`jellyfin-compose.yml`, release asset): just
+   Jellyfin, pinned to the version this release was tested with, port 8096,
+   named config/cache volumes, media folders as long-syntax binds (the user
+   edits this file; nothing overwrites it). The gateway reads Jellyfin's
+   version from `/System/Info/Public` and warns (log + status page) when it
+   differs from the tested pin baked into the binary.
+6. **Version visible:** heartbeat carries the gateway version; the Gateways
+   list shows it (migration #5).
+7. **Status page** (local page): version and update notice, API connected +
+   last heartbeat, Jellyfin reachable + version vs tested, Jellyfin admin
+   credentials when the gateway created them.
+8. **Gateway name** defaults to the OS hostname (as today natively); the
+   install command can pass `R8ER_NAME`.
+9. **Structured logs:** `log/slog` JSON (stdlib).
+10. Reconnect after a gateway restart/update is exercised (Checkpoint 2).
 
 ## Non-goals
 
-Image/compose signing (before strangers install — item 6 / Checkpoint 3);
-updater self-update (re-run install); Jellyfin downgrade/rollback; media
-management UI (IDEAS.md "Media management"); native packages; staged
-rollouts / channels; update-time-avoids-active-stream logic (fixed 04:00
-window instead); cert rotation (TECH_DEBT.md — own PR after this).
+Automatic updates (see deviation); running the gateway as a Windows
+service / systemd unit (the installer starts it; autostart is a documented
+manual step for now); bundling Jellyfin; code signing for Windows
+SmartScreen / macOS Gatekeeper (users see the "unknown publisher" prompt);
+media management UI (IDEAS.md "Media management"); cert rotation
+(TECH_DEBT.md, own PR); Docker as the supported gateway runtime (kept as a
+tested option, below).
 
 ## Decisions
 
-### One published `compose.yml` = one release
-`deploy/compose.yml` in the repo pins the **exact** gateway image version and
-the **exact** Jellyfin version (never `latest`, never a moving tag). The API
-image copies `deploy/` into `wwwroot/install/`, so prod serves
-`/install/compose.yml`, `/install/install.sh`, `/install/install.ps1`. Releasing
-= bump the pins, merge, approve the API deploy. Rollback = deploy the previous
-`compose.yml`. The deploy you already approve by hand is the release gate.
+### Native gateway, not a container (spike result)
+Docker Desktop's userspace networking gives each destination a different
+public port (probe: one socket → three STUN servers → 64475 / 64475 /
+64506; native Windows: 64302 ×3). The srflx candidate is useless, so a
+containerized gateway on Docker Desktop was **relayed on cellular**, while
+the native gateway connects directly. Linux Docker uses kernel NAT and should
+be fine, but this is unverified. So the native binary is the default.
+`gateway/Dockerfile` + `R8ER_ICE_PORT` (one published UDP port, host LAN IP
+advertised) stay as the tested Linux-Docker option, exercised by
+`E2E_GATEWAY_IMAGE=r8er-gateway:dev npm test`. Docker has no IPv6 by default,
+which is one more reason to stay native.
 
-### Files on the user's machine
+### Install layout
 ```
-r8er/
-  compose.yml            ours — the updater overwrites it
-  .env                   the user's — never touched by the updater
-  compose.override.yml   the user's — media folders (see "Media folders")
+Windows: %LOCALAPPDATA%\r8er\gateway.exe, state\, gateway.env
+Linux/macOS: ~/.local/share/r8er/gateway, state/, gateway.env
 ```
-Everything user-specific lives in `.env` / the override: `R8ER_API_URL`,
-`R8ER_ENROLL_TOKEN` (dead after first enroll), `R8ER_LAN_URL`, `TZ`, optional
-host-port overrides, optional `R8ER_UPDATE_URL` (channel, see below),
-optional `COMPOSE_PROFILES=hwaccel` (adds the
-`/dev/dri` device to Jellyfin). That split is what makes overwriting
-`compose.yml` safe.
+`gateway.env` holds what the user configured (`R8ER_API_URL`, `R8ER_NAME`,
+ports). The installer writes it on first run and leaves it alone afterwards.
+`R8ER_ENROLL_TOKEN` is passed only on the first run, never stored. The
+gateway reads `gateway.env` itself (a few lines of stdlib parsing), so it
+can be started by hand or by a scheduled task without a wrapper.
 
-`compose.yml` has top-level `name: r8er-home` and three services:
+### Release check details
+Compare versions as semver on `gateway-v` tags. Releases marked prerelease
+are skipped by GitHub's `latest`, which makes a nightly channel later just
+"follow prereleases" (IDEAS.md "Nightly channel"). Unauthenticated limit is
+60 requests/hour/IP; one call a day is far below it.
 
-| Service | Image | Notes |
+### Integrity
+The installer refuses a binary whose SHA256 doesn't match `SHA256SUMS` from
+the same release. That catches corrupted downloads, not a compromised GitHub
+account. Signing (cosign / minisign) belongs with the strangers-install
+work, same as the auto-update upgrade.
+
+## Dev machine: dev stack + installed copies
+
+| | Dev stack | Installed copy |
 |---|---|---|
-| `gateway` | `${R8ER_GATEWAY_IMAGE:-ghcr.io/bifi627/r8er-gateway:X.Y.Z}` | unprivileged; named volume `state`; `R8ER_ORIGIN=http://jellyfin:8096`; page `${R8ER_PAGE_PORT:-8097}:8097`, ICE `${R8ER_ICE_PORT:-8098}:${R8ER_ICE_PORT:-8098}/udp` (same number both sides: the advertised candidate carries the container-side port) |
-| `jellyfin` | `jellyfin/jellyfin:<pinned>` | named volumes `config`/`cache`; media mounts come from the override; dashboard `${R8ER_JELLYFIN_PORT:-8096}:8096` |
-| `updater` | `docker:<pinned>-cli` | Docker socket; mounts `r8er/` at `/r8er`; runs `deploy/update.sh` |
+| Gateway | `go run` from `gateway/` | released binary in the install dir |
+| State | `gateway/r8er-state` | `<install dir>/state` |
+| API / auth | `localhost:5028`, emulator | prod (or Railway dev), real Firebase |
+| Browser origin | `localhost:5173` | prod URL, so separate client keys and pins |
+| Jellyfin | dev compose (`-p r8er`) | `jellyfin-compose.yml` (own project) or a native install |
+| Ports | **moved to 18096 / 18097** | product defaults 8096 / 8097 |
 
-No relative bind mounts: compose runs inside the updater container, so
-relative paths would resolve against the container's filesystem, not the
-host's. Named volumes + absolute media paths only.
-
-### Media folders (any number of drives)
-Jellyfin only sees host folders mounted into its container, so each media
-folder is one mount under `/media/<name>`. They live in
-`compose.override.yml`, which Compose merges with `compose.yml` automatically
-(default file names) and the updater never touches:
-```yaml
-services:
-  jellyfin:
-    volumes:
-      - { type: bind, source: /mnt/disk1/Movies, target: /media/movies, read_only: true }
-      - { type: bind, source: /mnt/disk2/Series, target: /media/series, read_only: true }
-```
-- Installer: `-Media <dir>[,<dir>…]` (optional) writes the override, target =
-  folder name. No arg → one `<install dir>/media` folder.
-- Adding a drive later: one line in the override + `docker compose up -d`, then
-  add the library in Jellyfin. (A local-page "Add folder" that edits the
-  override = IDEAS.md "Media management".)
-- Libraries are created **in Jellyfin** by the user; the bootstrap does not add
-  any (it can't know which folder is movies vs series).
-- Long syntax on purpose: the short `D:\Movies:/media/movies` form splits on
-  the drive-letter colon.
-- **Windows paths (spike: verified):** plain `D:\Movies` in long syntax works
-  even though compose runs inside the Linux updater container. Docker Desktop
-  translates it, and so does `/run/desktop/mnt/host/d/Movies`. The installer
-  writes the plain form.
-- Updater validation (step 3) checks the **merged** result:
-  `docker compose -f compose.yml.new -f compose.override.yml config -q`.
-
-### Update lifecycle (`deploy/update.sh`, ~15 lines)
-At start, then daily at 04:00 `TZ` + random 0–30 min:
-1. `curl -fsS ${R8ER_UPDATE_URL:-$R8ER_API_URL/install/compose.yml}` → temp file. Fail → keep, retry tomorrow.
-2. Unchanged → done.
-3. `docker compose config -q` on it. Invalid → discard.
-4. Swap in; note current image IDs of `gateway`/`jellyfin`;
-   `docker compose pull --ignore-pull-failures gateway jellyfin`;
-   `docker compose up -d gateway jellyfin` (only changed containers recreate;
-   a missing image fails `up` before the old container is removed).
-5. `docker rmi` the noted old image IDs (errors ignored). **Never**
-   `docker image prune` — on a shared daemon (the dev machine) that reaches
-   beyond this project.
-6. Write the result to a status file in the gateway's state volume (last check
-   + outcome) → status page.
-
-"Update now" = `docker restart r8er-home-updater-1`. The updater never
-recreates itself: compose would kill its own process mid-run. Its image
-changes rarely; a new one = re-run the install command.
-
-**Failure modes:** bad gateway release crash-loops → publish the previous
-`compose.yml`; the independent updater rolls the fleet back. Jellyfin bumps
-are **one-way** (it migrates its DB, no downgrade) → test locally first. API
-down → no change. **Compromised API = root on every host** (the updater holds
-the Docker socket): accepted for dogfood only; signing closes it before
-strangers.
-
-### WebRTC from inside a container
-In a bridge network the gateway's host candidates are container IPs (useless
-on the LAN). Fix: gateway listens for ICE on one UDP port (Pion
-`SettingEngine.SetICEUDPMux`, `R8ER_ICE_PORT`), compose publishes it, and the
-gateway advertises the host's LAN IP from `R8ER_LAN_URL`
-(`SetNAT1To1IPs(…, ICECandidateTypeHost)`). Both unset (native dev) =
-today's behavior. srflx keeps working through Docker's NAT. **Spike first**:
-confirm direct (not relay) on LAN and from cellular, on Linux and on Docker
-Desktop — the `connection_sessions` telemetry tells us. If Docker Desktop
-relays everything, Windows falls back to the native `gateway.exe` + a
-scheduled task running the same download-and-restart.
-
-### Jellyfin bootstrap (gateway, `internal/jellyfinsetup`)
-Port of `scripts/setup-jellyfin.sh` steps 3–4 + key mint (no library step) to Go, run once when
-the state dir has no Jellyfin key and Jellyfin reports the wizard incomplete.
-If the wizard is already done (user set Jellyfin up themselves) and no key is
-configured → status page says "create an API key and set R8ER_JELLYFIN_API_KEY"
-(today's behavior). Key + admin password stored in the state dir (0600).
-
-## Dev machine: installed vs dev, side by side
-
-Both stacks share one Docker Desktop daemon. They're kept apart along every
-axis:
-
-| Axis | Dev stack | Installed (prod) |
-|---|---|---|
-| Compose project | `r8er` (`docker compose -p r8er`, repo root) | `r8er-home` (`name:` in `compose.yml`, own folder e.g. `%USERPROFILE%\r8er`) |
-| Containers / volumes / network | `r8er-*` | `r8er-home-*` |
-| Gateway | native `go run` | container |
-| Gateway state | `gateway/r8er-state` | named volume `r8er-home_state` |
-| API | `localhost:5028` + dev DB | prod Railway |
-| Auth | Firebase emulator | real Firebase |
-| Browser client key | origin `localhost:5173` | prod origin — separate IndexedDB, separate pins |
-| Host ports | **moved to 18096 (Jellyfin), 18097 (gateway page)** | product defaults 8096, 8097, 8098/udp |
-
-Port collision is the only real conflict. The dev side moves, so the
-installed side is a genuinely normal install with defaults: dev
-`docker-compose.yml` maps `18096:8096`; `.env.example`, `dev.ps1` /
-`setup-jellyfin.sh` and the gateway run command use `R8ER_ORIGIN=http://localhost:18096`
-and `R8ER_PAGE_PORT=18097`. (Binary defaults stay 8096/8097 — they are the
-product's.) e2e uses Testcontainers random ports — unaffected.
-
-**Testing item 4 itself (third, optional stack):** to try install/update
-against the *dev* API without publishing anything:
-```
-docker build -t r8er-gateway:dev gateway
-install.ps1 -Api http://host.docker.internal:5028 -Dir $HOME\r8er-dev
-# .env: COMPOSE_PROJECT_NAME=r8er-home-dev, R8ER_GATEWAY_IMAGE=r8er-gateway:dev,
-#       R8ER_PAGE_PORT=28097, R8ER_ICE_PORT=28098, R8ER_JELLYFIN_PORT=28096
-```
-`COMPOSE_PROJECT_NAME` in `.env` outranks `name:` (Compose precedence), so it
-can't collide with `r8er-home`. The dev API serves the repo's `deploy/` the
-same way prod does. Pull failures for the local-only image are ignored by the
-updater (step 4), so the update loop is exercised end to end.
-
-**Landmines (go in `docs/tools.md`):** never `docker volume prune` /
-`docker system prune --volumes` on the dev machine. They delete the
-installed gateway's identity (all browsers must re-pair) and its Jellyfin
-config. `scripts/setup-jellyfin.sh` only touches `r8er_*` volumes. Keep it
-that way.
-
-### Channels / nightly (not built now; must stay possible)
-A channel is just **which `compose.yml` the updater fetches**. Nothing in
-this design assumes a single one:
-- **Nightly gateway against prod API:** CI publishes `r8er-gateway:nightly-<sha>`
-  and `deploy/nightly/compose.yml` (served at `/install/nightly/compose.yml`);
-  the install sets `R8ER_UPDATE_URL` to it. Only needs the one `.env` knob,
-  which the updater reads from day one.
-- **Nightly whole app (API + SPA + gateway):** a second Railway environment.
-  Install with `-Api <nightly-url>`; its API serves its own `compose.yml`.
-  Zero extra code.
-
-A nightly copy on the dev machine is a fourth stack, same recipe as the
-item-4 test stack (`COMPOSE_PROJECT_NAME=r8er-home-nightly`, own ports). It
-has its **own Jellyfin config volume**, so a nightly Jellyfin bump (one-way
-migration) never touches the stable copy's library. Nightly is where Jellyfin
-bumps get tested before stable. Both can mount the same media folder `:ro`.
-Protocol rule this implies: a stable gateway must keep working against
-whatever API it talks to (API changes stay backward-compatible with the
-oldest gateway still in the field).
-
-## Spike results (2026-11-04, Windows 10 + Docker Desktop 29.9)
-
-- **LAN direct from a container: works.** The e2e golden path passes with the
-  gateway as a container (`E2E_GATEWAY_IMAGE=r8er-gateway:dev npm test`):
-  pairing, "direct · r8er carried 0 bytes", forced relay, re-pair after cert
-  swap. The native path still passes too.
-- **Forced relay in the harness** needed the gateway to also allocate on the
-  e2e coturn, because coturn advertises `127.0.0.1`. This is harness-only;
-  Cloudflare TURN has public addresses.
-- **Updater semantics: verified.** A container started by compose on the
-  Windows host shows `Running` (not recreated) when compose later runs from
-  inside a `docker:cli` container. An image change recreates it with the named
-  volume's data and the media bind intact.
-- **Still open: cellular.** This needs the owner's phone against a reachable
-  API (Railway dev). srflx comes from ephemeral ports through Docker's NAT,
-  because Pion v4 doesn't hand srflx gathering to the mux.
-- **Known loss:** the Docker bridge has no IPv6, so a containerized gateway has
-  IPv4-only candidates. The feasibility doc calls IPv6 the main lever against
-  relay. Watch `connection_sessions` (ip family, relay rate) on dogfood
-  installs. Upgrade path: `network_mode: host` on Linux. That breaks
-  service-name DNS, so Jellyfin would need a localhost port.
+The dev side moves ports so an installed copy is a genuinely default install:
+dev `docker-compose.yml` maps `18096:8096`; `.env.example`,
+`setup-jellyfin.sh` and the dev gateway run command use
+`R8ER_ORIGIN=http://localhost:18096` and `R8ER_PAGE_PORT=18097`. Binary defaults
+stay 8096/8097. e2e uses random ports and is unaffected. A second installed
+copy (e.g. nightly later) = another install dir with its own state, page port
+and Jellyfin.
 
 ## PR split
 
-- **PR A — install it:** gateway Dockerfile + CI image build (publish job
-  manual), `deploy/compose.yml` + `install.sh`/`install.ps1` served from the
-  API, Jellyfin bootstrap, ICE UDP mux + NAT1To1 (after the spike), slog,
-  version in heartbeat + Gateways list (migration #5), status page, dev port
-  move, docs (`tools.md`, CLAUDE.md, install guide).
-- **PR B — keep it current:** updater service + `update.sh`, status file →
-  status page, one real update shipped to the owner's install (Checkpoint 3
-  evidence starts here).
-- **Then:** cert rotation (TECH_DEBT.md), signing (before strangers).
+- **PR A — release + install:** release workflow, `install.sh`/`install.ps1`,
+  `gateway.env`, update notice, version in heartbeat + Gateways list, slog,
+  dev port move, docs (`tools.md`, CLAUDE.md, install guide).
+- **PR B — Jellyfin without manual steps:** wizard bootstrap, admin-login key
+  mint on the local page, `jellyfin-compose.yml`, tested-version warning,
+  status page.
+- **Then:** cert rotation (TECH_DEBT.md); auto-update + signing before
+  strangers.
 
-## Resolved (2026-11-04)
+## Spike record (2026-11-04, Windows 10 + Docker Desktop 29.9)
 
-1. **GHCR image public:** yes (the repo is public anyway).
-2. **Media folder at install:** optional; any number of folders across
-   drives via `compose.override.yml` (see "Media folders").
-3. **Admin password on the LAN page:** OK for now; TECH_DEBT.md "Local page
-   shows Jellyfin admin password unauthenticated".
-4. **Nightly channel:** not built; IDEAS.md "Nightly channel". The
-   `R8ER_UPDATE_URL` knob ships now so it stays possible.
+- Container gateway, LAN: direct. e2e golden path passes against the image.
+- Container gateway, cellular: **relayed**. Cause: Docker Desktop NAT is
+  destination-dependent (probe above). Native: direct.
+- Windows paths in compose long syntax (`D:\Movies`) work even when compose
+  runs inside a Linux container.
+- Compose run from a container doesn't recreate host-started containers;
+  image changes recreate them with volumes and binds intact. (Only relevant
+  if the sidecar idea returns.)
+- Gateway name inside a container = container ID; native uses the hostname.
+
+## Resolved
+
+1. GitHub repo and release assets are public.
+2. Media folders are configured in Jellyfin (native install) or as binds in
+   `jellyfin-compose.yml`, across any number of drives.
+3. Jellyfin admin password on the LAN page: OK for now; TECH_DEBT.md "Local
+   page shows Jellyfin admin password unauthenticated".
+4. Nightly: IDEAS.md "Nightly channel" (now = prereleases).

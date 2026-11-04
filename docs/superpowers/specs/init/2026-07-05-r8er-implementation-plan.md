@@ -154,6 +154,10 @@ All engineering attention goes to the streaming path.
    single-command install, **auto-update from day one** (agent
    self-updates; Jellyfin image pinned and updated by the agent), structured
    logs, a local status page.
+   *2026-11-04 deviation:* updates are **notify-only** for dogfood (native
+   binaries from GitHub Releases, gateway logs the update command); Jellyfin
+   is optional via a pinned compose file, not bundled. Auto-update returns
+   before strangers install. See `../2026-11-04-r8er-gateway-productization-design.md`.
 5. **Streaming client.** React media UI: browse library (Jellyfin API
    through the tunnel — no cloud catalog yet; host offline simply shows
    "host offline," greyed-out cached browsing is QOL), play, seek, resume.
