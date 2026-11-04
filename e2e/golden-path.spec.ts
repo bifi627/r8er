@@ -1,6 +1,6 @@
 // THE golden path (dev-env spec: exactly one E2E; edge cases belong in the
 // integration layer). Real browser → broker → gateway → Jellyfin: onboard, pair,
-// browse, play, resume, re-pair, remove.
+// install check, browse, play, resume, re-pair, remove.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -49,6 +49,18 @@ test('onboard gateway, pair, pin, re-pair after cert swap, remove', async ({
 }) => {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'r8er-e2e-gateway-'))
   const a = await signIn(browser, true)
+
+  await test.step('installable as a PWA (manifest + icons)', async () => {
+    const cdp = await a.context().newCDPSession(a)
+    const { installabilityErrors } = await cdp.send(
+      'Page.getInstallabilityErrors',
+    )
+    // Playwright contexts are always incognito: that error is the harness, not the app.
+    expect(
+      installabilityErrors.filter((e) => e.errorId !== 'in-incognito'),
+    ).toEqual([])
+    expect((await cdp.send('Page.getAppManifest')).errors).toEqual([])
+  })
 
   // Onboarding: Add gateway → run the shown install command.
   await a.getByRole('button', { name: 'Add gateway' }).click()
