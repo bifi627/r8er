@@ -37,5 +37,8 @@ dev/.cloudflare-turn.json
 # Reqnroll anonymous-telemetry id dropped next to the test project (local state)
 backend/tests/**/Reqnroll/
 
+# Dev gateway env from scripts/setup-jellyfin.sh (throwaway Jellyfin key, dev ports)
+gateway/gateway.env
+
 # Gateway state dir (persistent DTLS cert + credential) from local runs
 r8er-state/

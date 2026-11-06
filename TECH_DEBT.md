@@ -35,6 +35,18 @@ test. Keep 10 years until this exists.
 
 **Pay down:** item 4 (productized gateway, alongside auto-update).
 
+### Local page shows Jellyfin admin password unauthenticated
+**Area:** gateway / localpage
+
+The gateway's LAN page (`:8097`) shows the bootstrapped Jellyfin admin
+password to anyone on the home LAN (only the Host/Origin guard; no login).
+Fine for a single household's LAN; not fine on shared/guest networks.
+Plan: gate the page (or just the secrets) behind a Firebase sign-in of a
+tenant member, verified by the gateway against the API.
+
+**Pay down:** before strangers install (item 6 / Checkpoint 3), or when the
+local page grows admin actions (IDEAS.md "Media management").
+
 ### npm audit: frontend grpc-js (via firebase)
 **Area:** frontend / npm audit
 

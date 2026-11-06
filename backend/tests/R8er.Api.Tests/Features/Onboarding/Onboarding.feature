@@ -29,6 +29,7 @@ Feature: Gateway onboarding
   Scenario: A heartbeat updates only the sending gateway's row
     Given "alice@home.test" has an enrolled gateway "nas"
     And "alice@home.test" has an enrolled gateway "pc"
-    When gateway "nas" heartbeats with LAN URL "http://192.168.1.20:8097"
+    When gateway "nas" heartbeats with LAN URL "http://192.168.1.20:8097" and version "1.4.0"
     Then "alice@home.test" sees "nas" online at "http://192.168.1.20:8097/"
+    And "alice@home.test" sees "nas" at version "1.4.0"
     And "alice@home.test" sees "pc" offline

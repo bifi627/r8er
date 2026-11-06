@@ -1,0 +1,45 @@
+# Gateway release (item 4): pushing a tag gateway-vX.Y.Z (the human approval)
+# builds the native binaries and publishes them as a GitHub Release, which is
+# what install.sh / install.ps1 download and the gateway's update notice
+# checks. Tags with a suffix (gateway-v1.5.0-nightly.3) become prereleases,
+# which "latest" skips (IDEAS.md "Nightly channel").
+name: release-gateway
+on:
+  push:
+    tags: ['gateway-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release; nothing else
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: gateway/go.mod
+      - run: go vet ./... && go test ./...
+        working-directory: gateway
+      - name: build
+        working-directory: gateway
+        run: |
+          v="${GITHUB_REF_NAME#gateway-v}"
+          mkdir -p ../dist
+          for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os="${t%/*}" arch="${t#*/}" ext=""
+            [ "$os" = windows ] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=$v" -o "../dist/r8er-gateway-$os-$arch$ext" ./cmd/gateway
+          done
+          cp install/install.sh install/install.ps1 ../dist/
+          (cd ../dist && sha256sum r8er-gateway-* > SHA256SUMS)
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --generate-notes $pre

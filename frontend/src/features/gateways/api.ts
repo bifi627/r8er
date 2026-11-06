@@ -5,6 +5,7 @@ export type Gateway = {
   name: string | null
   lastSeenAt: string | null
   lanUrl: string | null
+  version: string | null
   online: boolean
 }
 

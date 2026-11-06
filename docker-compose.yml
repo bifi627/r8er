@@ -17,7 +17,9 @@ services:
     # Pinned deliberately — never `latest`. Update the pin consciously.
     image: jellyfin/jellyfin:12.4.20261026-211555
     ports:
-      - "8096:8096"
+      # 18096, not 8096: an installed r8er (gateway + Jellyfin on the product
+      # defaults 8096/8097) can run on the dev machine at the same time.
+      - "18096:8096"
     volumes:
       - jellyfin-config:/config
       - jellyfin-cache:/cache

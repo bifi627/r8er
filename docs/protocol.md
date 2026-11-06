@@ -27,9 +27,11 @@ shown once, the API keeps its SHA-256) · `400` malformed fingerprint ·
 <credential>` (`401` before upgrade if unknown). Gateway → API, one JSON text
 frame on connect and every 30 s:
 ```json
-{ "type": "heartbeat", "lanUrl": "http://192.168.1.20:8097" }
+{ "type": "heartbeat", "lanUrl": "http://192.168.1.20:8097", "version": "1.4.0" }
 ```
-The API sets `last_seen_at = now` and `lan_url` (http/https only, else null).
+The API sets `last_seen_at = now`, `lan_url` (http/https only, else null) and
+`version` (≤ 40 chars, else null; `"dev"` for source builds). `version` is
+optional: older gateways omit it.
 `GET /gateways` reports `online` = last heartbeat within 90 s. The same socket
 carries the gateway's half of the broker (below).
 

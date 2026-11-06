@@ -44,7 +44,10 @@ func LoadOrEnroll(ctx context.Context, dir, api, token, fp string) (*State, erro
 		return nil, errors.New("not enrolled: set R8ER_ENROLL_TOKEN (web app → Add gateway)")
 	}
 
-	name, _ := os.Hostname()
+	name := os.Getenv("R8ER_NAME") // install command may set it
+	if name == "" {
+		name, _ = os.Hostname()
+	}
 	body, _ := json.Marshal(map[string]string{"token": token, "fingerprint": fp, "name": name})
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, api+"/gateways/enroll", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -71,7 +74,7 @@ func LoadOrEnroll(ctx context.Context, dir, api, token, fp string) (*State, erro
 // RunControl holds the authenticated control socket until it drops: heartbeats
 // out, broker messages (signaling for browser sessions) in, handed to handle
 // with a send func that writes JSON back on this socket.
-func RunControl(ctx context.Context, api string, st *State, lanURL string, online *atomic.Bool,
+func RunControl(ctx context.Context, api string, st *State, lanURL, version string, online *atomic.Bool,
 	handle func(raw []byte, send func(any))) error {
 	conn, _, err := websocket.Dial(ctx, api+"/gateways/ws", &websocket.DialOptions{
 		HTTPHeader: http.Header{"Authorization": {"Bearer " + st.Credential}},
@@ -95,7 +98,7 @@ func RunControl(ctx context.Context, api string, st *State, lanURL string, onlin
 		t := time.NewTicker(heartbeatEvery)
 		defer t.Stop()
 		for {
-			send(map[string]string{"type": "heartbeat", "lanUrl": lanURL})
+			send(map[string]string{"type": "heartbeat", "lanUrl": lanURL, "version": version})
 			online.Store(true)
 			select {
 			case <-ctx.Done():

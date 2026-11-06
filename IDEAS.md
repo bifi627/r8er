@@ -33,3 +33,15 @@ local, so nothing sensitive crosses the control plane. Not in the r8er web app
 (remote admin = new attack surface).
 
 **When:** with item 4 (productized gateway), or once a non-owner household installs.
+
+### Nightly channel
+**Area:** gateway / release
+
+Prerelease builds for the owner's second installed copy. Gateways update from
+GitHub Releases (item 4); `releases/latest` skips prereleases, so nightly =
+CI publishes `gateway-vX.Y.Z-nightly.<n>` as a prerelease and a nightly
+install follows prereleases instead of latest (one flag on the update check
+and install script). On the dev machine: another install dir with its own
+state, page port and Jellyfin. Detail: item 4 spec.
+
+**When:** once there are real users on stable worth protecting from untested builds.

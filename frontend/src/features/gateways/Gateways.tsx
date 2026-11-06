@@ -54,6 +54,7 @@ export function Gateways() {
               {d.name ?? 'gateway'}{' '}
               <code style={{ fontSize: '0.8em', color: '#888' }}>{d.id}</code> —{' '}
               {d.online ? 'online' : 'offline'}
+              {d.version && ` · ${d.version}`}
               {d.online && d.lanUrl && (
                 <>
                   {' · '}
@@ -89,7 +90,13 @@ export function Gateways() {
             ['PowerShell', install.installCommandPowershell],
           ].map(([label, cmd]) => (
             <div key={label}>
-              <b>{label}</b> (from <code>gateway/</code>)
+              <b>{label}</b>
+              {cmd.includes('go run') && (
+                <>
+                  {' '}
+                  (from <code>gateway/</code>)
+                </>
+              )}
               <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                 {cmd}
               </pre>

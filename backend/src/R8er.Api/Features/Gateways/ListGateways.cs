@@ -16,7 +16,7 @@ public static class ListGateways
         {
             var onlineSince = DateTimeOffset.UtcNow - OnlineWindow;
             return await db.Gateways.OrderBy(d => d.CreatedAt)
-                .Select(d => new { d.Id, d.Name, d.LastSeenAt, d.LanUrl, Online = d.LastSeenAt > onlineSince })
+                .Select(d => new { d.Id, d.Name, d.LastSeenAt, d.LanUrl, d.Version, Online = d.LastSeenAt > onlineSince })
                 .ToListAsync(ct);
         }).RequireAuthorization();
     }
