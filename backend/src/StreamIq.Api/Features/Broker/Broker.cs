@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace StreamIq.Api.Features.Broker;
 
-/// Tenant-scoped signaling broker (design: specs/2026-11-01-streamiq-gateway-pairing-
+/// Tenant-scoped signaling broker (design: specs/2026-11-01-streamiq-agent-pairing-
 /// design.md). Connected gateways by gateway id, live browser sessions by session
 /// id. The broker relays SDP/ICE but can't make either side trust the other:
 /// pins + pairing do that. ponytail: in-memory, single API instance (Railway);
