@@ -21,7 +21,7 @@ _Last updated: 2026-07-08. Repo state: `feat: signaling poc part 7a`._
 
 ## Verdict (Checkpoint-1 connectivity criterion: MET)
 
-Read live: `GET https://streamiq.up.railway.app/telemetry/poc` (returns rows + a
+Read live: `GET https://r8er.up.railway.app/telemetry/poc` (returns rows + a
 `{total, direct, relay, failed}` summary). Rate excludes `home-*`/LAN rows and
 the forced `&relay=1` sanity row (#6).
 
@@ -34,7 +34,7 @@ the forced `&relay=1` sanity row (#6).
 
 Takeaways:
 - **The flagship path (cellular → home) went direct on every sample.** Free,
-  private (0 bytes through streamiq/Cloudflare), 5–32 Mbps — comfortable 1080p.
+  private (0 bytes through r8er/Cloudflare), 5–32 Mbps — comfortable 1080p.
 - **TURN is a real, exercised fallback, not a hypothesis** — one hostile guest
   network (captive T-Mobile AP) needed it and it worked.
 - **Connectivity ≠ bandwidth (record this):** #23 `Vs-free-wlan` connected
@@ -115,10 +115,10 @@ Prints the home-agent env + a bookmarkable phone URL; saves
 
 **2. Run the home agent** (paste the script's `=== Home gateway ===` block; the agent is now the gateway):
 ```
-STREAMIQ_SIGNAL_URL   = wss://streamiq.up.railway.app/signaling/poc
-STREAMIQ_ICE_URLS     = turn:turn.cloudflare.com:3478?transport=udp,...(all Cloudflare URLs)
-STREAMIQ_ICE_USERNAME = <from script>
-STREAMIQ_ICE_CREDENTIAL = <from script>
+R8ER_SIGNAL_URL   = wss://r8er.up.railway.app/signaling/poc
+R8ER_ICE_URLS     = turn:turn.cloudflare.com:3478?transport=udp,...(all Cloudflare URLs)
+R8ER_ICE_USERNAME = <from script>
+R8ER_ICE_CREDENTIAL = <from script>
 go run ./cmd/gateway    # from gateway/
 ```
 The agent must be the first peer in the room and stay running throughout.
@@ -135,14 +135,14 @@ pair connects at all (e.g. UDP-blocked Wi-Fi that also defeats TURN) — the wor
 outcome must count against the rate, not vanish.
 
 **Local relay path (no cloud needed):** `docker compose --profile relay up -d`,
-run the agent with `STREAMIQ_ICE_URLS=turn:127.0.0.1:3478?transport=udp` +
+run the agent with `R8ER_ICE_URLS=turn:127.0.0.1:3478?transport=udp` +
 `dev`/`dev`, open `http://localhost:5028/connect.html#…&relay=1`. coturn needs
 `--external-ip=127.0.0.1` on Docker Desktop (already in compose) or the relayed
 candidate is a black hole.
 
 ## Instrument architecture
 
-- **Backend** (`backend/src/StreamIq.Api`, on Railway):
+- **Backend** (`backend/src/R8er.Api`, on Railway):
   - `/signaling/{room}` — WebSocket SDP/ICE relay (2 peers, unchanged since step 2).
   - `POST/GET /telemetry/poc` — insert one session row / list rows + summary.
     `Telemetry.cs`: raw **Npgsql** (no EF), `CREATE TABLE IF NOT EXISTS
@@ -152,7 +152,7 @@ candidate is a black hole.
   - `/connect.html` — the harness, served static from `wwwroot/` so a phone can
     load it same-origin (file:// is desktop-only).
 - **Agent** (`gateway/cmd/gateway`, was `agent/`): `iceServers()` = Google STUN + optional TURN
-  from `STREAMIQ_ICE_*` env.
+  from `R8ER_ICE_*` env.
 - **Harness** (`wwwroot/connect.html`): origin-aware defaults (signal + telemetry
   from `location`); hash params `signal,tele,note,turn,user,cred,relay`. Reuses
   the step-3 "throughput" flood for Mbps, then `getStats()` to classify.

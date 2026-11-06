@@ -78,7 +78,8 @@ tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
 Dated specs/plans keep the old words.
 **Project name:** StreamIQ (was "r8er" until 2026-11-06). Code forms: `streamiq` (paths,
 module, DB, binaries), `StreamIq` (.NET namespaces/types), `STREAMIQ_` (env vars); "StreamIQ"
-in user-visible text. Don't reintroduce the old name.
+in user-visible text. Don't reintroduce the old name (historical records such as
+`docs/poc-connectivity-spike.md` keep it: those URLs/env vars really were `r8er`).
 
 ## Stack & layout
 

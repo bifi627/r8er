@@ -71,10 +71,12 @@ until a human changes them:
   the old one. Do this before the first `gateway-v*` tag.
 - **Railway**: the project/service display names. Env var names on Railway are unaffected
   unless one starts with `R8ER_` (e.g. `R8ER_PUBLIC_URL`) → rename it to `STREAMIQ_…`.
-- **Local dev DB**: compose now creates DB/user `streamiq`. An old `r8er` volume needs
-  `docker compose down -v` once. A user-secrets `ConnectionStrings:Default` pointing at a
+- **Local dev DB**: compose is pinned to project `streamiq` (`name:` in docker-compose.yml), so it
+  starts on fresh `streamiq_*` volumes with DB/user `streamiq`. The old `r8er_*` volumes are
+  orphaned: `docker compose -p r8er down -v` removes them. A user-secrets `ConnectionStrings:Default` pointing at a
   Railway dev DB keeps working (it names the DB explicitly).
 - **Local `gateway/gateway.env`** (git-ignored, from `scripts/setup-jellyfin.sh`): keys are
   now `STREAMIQ_*`; re-run the script. Old state dir `gateway/r8er-state/` → `streamiq-state/`
   (move it to keep the dev gateway's identity, or re-enroll).
-- **Browsers paired in dev**: the client key moved to IndexedDB `streamiq`, so re-pair once.
+- **Every paired browser (dev and prod)**: the client key moved to IndexedDB `streamiq` and the auth
+  label changed, so each browser re-pairs once; gateways keep stale allowlist entries (harmless).
