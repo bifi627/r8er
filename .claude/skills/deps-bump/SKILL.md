@@ -1,7 +1,7 @@
 ---
 name: deps-bump
 description: >-
-  Use when bumping dependencies in r8er — NuGet (backend), npm (frontend/e2e:
+  Use when bumping dependencies in StreamIQ — NuGet (backend), npm (frontend/e2e:
   React / Vite / TypeScript), Go modules (gateway), pinned Docker images
   (compose: Jellyfin/Postgres/coturn), GitHub Actions, or devcontainer
   features. Triggered by Dependabot PRs, an explicit "update X" request, or a
@@ -9,7 +9,7 @@ description: >-
   code refactors that happen to touch package.json.
 ---
 
-# r8er dependency bumps
+# StreamIQ dependency bumps
 
 ## Core principle
 
@@ -22,7 +22,7 @@ burn it per package.
 This skill stores no pending-bump state — derive the candidate set at runtime:
 
 ```bash
-dotnet list backend/R8er.slnx package --outdated
+dotnet list backend/StreamIq.slnx package --outdated
 npm outdated --prefix frontend            # and any other package dirs (e2e/)
 cd gateway && go list -m -u all             # Go modules
 # plus: image pins in docker-compose.yml, .devcontainer/devcontainer.json
@@ -54,7 +54,7 @@ manual play/seek check — treat it as a major, always its own wave.
 ## Per-wave verify (default, don't skip)
 
 ```bash
-dotnet test backend/R8er.slnx             # needs Docker (Testcontainers)
+dotnet test backend/StreamIq.slnx             # needs Docker (Testcontainers)
 npm run build --prefix frontend           # tsc -b + vite build
 npm run lint --prefix frontend
 cd gateway && go build ./... && go test ./...

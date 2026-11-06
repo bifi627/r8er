@@ -41,4 +41,6 @@ backend/tests/**/Reqnroll/
 gateway/gateway.env
 
 # Gateway state dir (persistent DTLS cert + credential) from local runs
+streamiq-state/
+# pre-rename name of the same dir (holds a private key; keep ignored)
 r8er-state/

@@ -16,7 +16,7 @@ import (
 // LatestURL is GitHub's latest *non-prerelease* release. ponytail: assumes
 // every release in the repo is a gateway release (tag gateway-vX.Y.Z); filter
 // by tag prefix over /releases if the repo ever publishes other releases.
-const LatestURL = "https://api.github.com/repos/bifi627/r8er/releases/latest"
+const LatestURL = "https://api.github.com/repos/bifi627/streamiq/releases/latest"
 
 // Latest returns the newest release's version ("1.4.0"), or "" if the latest
 // release isn't a gateway release.
@@ -81,7 +81,7 @@ func parse(v string) []int {
 
 // Command is the one line the user runs to update on this OS.
 func Command() string {
-	const dl = "https://github.com/bifi627/r8er/releases/latest/download/"
+	const dl = "https://github.com/bifi627/streamiq/releases/latest/download/"
 	if runtime.GOOS == "windows" {
 		return "irm " + dl + "install.ps1 | iex"
 	}

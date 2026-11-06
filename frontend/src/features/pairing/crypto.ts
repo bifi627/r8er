@@ -32,7 +32,7 @@ export function sdpFingerprint(sdp: string) {
 
 /** What the client key signs: bound to both DTLS fingerprints of this session. */
 export const authMessage = (gatewayFp: string, browserFp: string, n: string) =>
-  enc.encode(`r8er-auth-v1|${gatewayFp}|${browserFp}|${n}`)
+  enc.encode(`streamiq-auth-v1|${gatewayFp}|${browserFp}|${n}`)
 
 /** 6-digit comparison code over the committed nonces. */
 export async function comparisonCode(

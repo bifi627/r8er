@@ -5,8 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "== backend: format + build + test =="
-dotnet format backend/R8er.slnx --verify-no-changes
-dotnet test backend/R8er.slnx --nologo
+dotnet format backend/StreamIq.slnx --verify-no-changes
+dotnet test backend/StreamIq.slnx --nologo
 
 # Fresh worktrees have no node_modules (gitignored); install from the lockfile once.
 for d in frontend e2e; do [ -d "$d/node_modules" ] || npm ci --prefix "$d"; done

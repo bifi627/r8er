@@ -5,9 +5,10 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth'
 // emulator requires; prod supplies the real apiKey/authDomain via VITE_ vars.
 const app = initializeApp({
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? 'demo-key',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? 'demo-r8er',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? 'demo-streamiq',
   authDomain:
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? 'demo-r8er.firebaseapp.com',
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ??
+    'demo-streamiq.firebaseapp.com',
 })
 
 export const auth = getAuth(app)

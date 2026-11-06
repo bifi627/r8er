@@ -39,7 +39,7 @@ ffmpeg -y -f lavfi -i "testsrc=duration=360:size=1920x1080:rate=30" \
 cat > dev-media/h264-1080p-subs.en.srt <<'SRT'
 1
 00:00:02,000 --> 00:00:09,000
-r8er subtitle test — if you can read this, subs survive the tunnel
+streamiq subtitle test — if you can read this, subs survive the tunnel
 
 2
 00:00:30,000 --> 00:00:36,000

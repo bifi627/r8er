@@ -1,13 +1,13 @@
-# r8er dev dependencies. Backend/frontend/gateway run natively (see CLAUDE.md).
+# streamiq dev dependencies. Backend/frontend/gateway run natively (see CLAUDE.md).
 # Usage: docker compose up -d
 #        docker compose --profile relay up -d   (adds local TURN)
 services:
   postgres:
     image: postgres:18
     environment:
-      POSTGRES_USER: r8er
+      POSTGRES_USER: streamiq
       POSTGRES_PASSWORD: dev
-      POSTGRES_DB: r8er
+      POSTGRES_DB: streamiq
     ports:
       - "5432:5432"
     volumes:
@@ -17,7 +17,7 @@ services:
     # Pinned deliberately — never `latest`. Update the pin consciously.
     image: jellyfin/jellyfin:12.4.20261026-211555
     ports:
-      # 18096, not 8096: an installed r8er (gateway + Jellyfin on the product
+      # 18096, not 8096: an installed streamiq (gateway + Jellyfin on the product
       # defaults 8096/8097) can run on the dev machine at the same time.
       - "18096:8096"
     volumes:
@@ -38,7 +38,7 @@ services:
     command: >-
       sh -c 'A="--export-on-exit=/app/data";
       [ -f /app/data/firebase-export-metadata.json ] && A="--import=/app/data $$A";
-      exec firebase emulators:start --only auth --project demo-r8er $$A'
+      exec firebase emulators:start --only auth --project demo-streamiq $$A'
     ports:
       - "9099:9099"
     volumes:
@@ -53,7 +53,7 @@ services:
     image: coturn/coturn:4.18.0
     profiles: ["relay"]
     command: >-
-      turnserver -n --lt-cred-mech --user dev:dev --realm r8er.dev
+      turnserver -n --lt-cred-mech --user dev:dev --realm streamiq.dev
       --listening-port 3478 --min-port 49160 --max-port 49200
       --external-ip=127.0.0.1 --verbose
     ports:

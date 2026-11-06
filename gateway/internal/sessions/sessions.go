@@ -1,5 +1,5 @@
 // Package sessions serves browsers brokered over the control socket (design:
-// specs/2026-11-01-r8er-agent-pairing-design.md, "Concurrent sessions" and
+// specs/2026-11-01-streamiq-agent-pairing-design.md, "Concurrent sessions" and
 // "Connection gating"): one PeerConnection per broker session, an `auth` data
 // channel that proves the browser's client key bound to this DTLS session, and
 // tunnel channels only once that key is on the allowlist — or gets approved.
@@ -19,9 +19,9 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"r8er/gateway/internal/identity"
-	"r8er/gateway/internal/pairing"
-	"r8er/gateway/internal/tunnel"
+	"streamiq/gateway/internal/identity"
+	"streamiq/gateway/internal/pairing"
+	"streamiq/gateway/internal/tunnel"
 )
 
 // Msg is the broker envelope on the control socket (docs/protocol.md).
@@ -45,13 +45,13 @@ type Sessions struct {
 
 // NewAPI builds the one WebRTC API all sessions share. Native runs need
 // nothing (zero value = Pion defaults). In Docker the container's IPs are
-// useless to browsers, so R8ER_ICE_PORT pins host candidates to one UDP port
-// (published by compose) and the host's LAN IP — taken from R8ER_LAN_URL —
+// useless to browsers, so STREAMIQ_ICE_PORT pins host candidates to one UDP port
+// (published by compose) and the host's LAN IP — taken from STREAMIQ_LAN_URL —
 // is advertised instead of the container's. srflx still gathers on ephemeral
 // ports through Docker's NAT (Pion has no srflx-over-mux hook in v4).
 func NewAPI() (*webrtc.API, error) {
 	var se webrtc.SettingEngine
-	port := os.Getenv("R8ER_ICE_PORT")
+	port := os.Getenv("STREAMIQ_ICE_PORT")
 	if port == "" {
 		return webrtc.NewAPI(), nil
 	}
@@ -60,7 +60,7 @@ func NewAPI() (*webrtc.API, error) {
 		return nil, err
 	}
 	se.SetICEUDPMux(webrtc.NewICEUDPMux(nil, conn))
-	if u, err := url.Parse(os.Getenv("R8ER_LAN_URL")); err == nil && net.ParseIP(u.Hostname()) != nil {
+	if u, err := url.Parse(os.Getenv("STREAMIQ_LAN_URL")); err == nil && net.ParseIP(u.Hostname()) != nil {
 		if err := se.SetICEAddressRewriteRules(webrtc.ICEAddressRewriteRule{
 			External: []string{u.Hostname()}, AsCandidateType: webrtc.ICECandidateTypeHost,
 		}); err != nil {
@@ -258,15 +258,15 @@ func answer(pc *webrtc.PeerConnection, offer webrtc.SessionDescription, id strin
 	return nil
 }
 
-// iceServers: Google STUN plus optional TURN from env (R8ER_ICE_URLS,
-// R8ER_ICE_USERNAME, R8ER_ICE_CREDENTIAL).
+// iceServers: Google STUN plus optional TURN from env (STREAMIQ_ICE_URLS,
+// STREAMIQ_ICE_USERNAME, STREAMIQ_ICE_CREDENTIAL).
 func iceServers() []webrtc.ICEServer {
 	servers := []webrtc.ICEServer{{URLs: []string{"stun:stun.l.google.com:19302"}}}
-	if urls := os.Getenv("R8ER_ICE_URLS"); urls != "" {
+	if urls := os.Getenv("STREAMIQ_ICE_URLS"); urls != "" {
 		servers = append(servers, webrtc.ICEServer{
 			URLs:       strings.Split(urls, ","),
-			Username:   os.Getenv("R8ER_ICE_USERNAME"),
-			Credential: os.Getenv("R8ER_ICE_CREDENTIAL"),
+			Username:   os.Getenv("STREAMIQ_ICE_USERNAME"),
+			Credential: os.Getenv("STREAMIQ_ICE_CREDENTIAL"),
 		})
 	}
 	return servers

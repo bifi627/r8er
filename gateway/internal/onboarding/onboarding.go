@@ -1,6 +1,6 @@
 // Package onboarding is flow 1 of the pairing design: spend a one-time
 // enrollment token for a long-lived credential, then hold the authenticated
-// control socket and heartbeat (design: specs/2026-11-01-r8er-agent-pairing-design.md).
+// control socket and heartbeat (design: specs/2026-11-01-streamiq-agent-pairing-design.md).
 package onboarding
 
 import (
@@ -41,10 +41,10 @@ func LoadOrEnroll(ctx context.Context, dir, api, token, fp string) (*State, erro
 		return nil, err
 	}
 	if token == "" {
-		return nil, errors.New("not enrolled: set R8ER_ENROLL_TOKEN (web app → Add gateway)")
+		return nil, errors.New("not enrolled: set STREAMIQ_ENROLL_TOKEN (web app → Add gateway)")
 	}
 
-	name := os.Getenv("R8ER_NAME") // install command may set it
+	name := os.Getenv("STREAMIQ_NAME") // install command may set it
 	if name == "" {
 		name, _ = os.Hostname()
 	}
@@ -116,10 +116,10 @@ func RunControl(ctx context.Context, api string, st *State, lanURL, version stri
 	}
 }
 
-// LANURL is the page's address on the home LAN: R8ER_LAN_URL if set (needed in
+// LANURL is the page's address on the home LAN: STREAMIQ_LAN_URL if set (needed in
 // Docker, where the container IP is useless), else the first private IPv4.
 func LANURL(port string) string {
-	if u := os.Getenv("R8ER_LAN_URL"); u != "" {
+	if u := os.Getenv("STREAMIQ_LAN_URL"); u != "" {
 		return u
 	}
 	addrs, _ := net.InterfaceAddrs()

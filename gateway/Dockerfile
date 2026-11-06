@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# r8er gateway image (item 4). Multi-arch via buildx: TARGETOS/TARGETARCH come
+# streamiq gateway image (item 4). Multi-arch via buildx: TARGETOS/TARGETARCH come
 # from --platform; the Go cross-compile runs on the build host, no QEMU.
 # Base tags float at patch level on purpose — they pick up security updates.
 FROM --platform=$BUILDPLATFORM golang:1.26 AS build
@@ -17,6 +17,6 @@ FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /gateway /gateway
 # Owned by nonroot so a fresh named volume mounted here inherits writable perms.
 COPY --from=build --chown=65532:65532 /state /state
-ENV R8ER_STATE_DIR=/state R8ER_ICE_PORT=8098
+ENV STREAMIQ_STATE_DIR=/state STREAMIQ_ICE_PORT=8098
 EXPOSE 8097 8098/udp
 ENTRYPOINT ["/gateway"]

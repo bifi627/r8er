@@ -176,7 +176,7 @@ function Listing({
   )
 }
 
-// Privacy indicator: what r8er can see of this stream, from the live selected
+// Privacy indicator: what StreamIQ can see of this stream, from the live selected
 // candidate pair. Either way the tunnel is DTLS end to end (pinned both ways).
 function Privacy({ pc }: { pc: RTCPeerConnection }) {
   const [p, setP] = useState<PairInfo | null>(null)
@@ -197,8 +197,8 @@ function Privacy({ pc }: { pc: RTCPeerConnection }) {
       <small>
         🔒{' '}
         {p.relay
-          ? `relayed (encrypted, r8er cannot decrypt) · ${mb} MB relayed`
-          : 'end-to-end encrypted · direct · r8er carried 0 bytes'}
+          ? `relayed (encrypted, StreamIQ cannot decrypt) · ${mb} MB relayed`
+          : 'end-to-end encrypted · direct · StreamIQ carried 0 bytes'}
       </small>
     </p>
   )

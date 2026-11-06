@@ -23,8 +23,8 @@ import (
 type Jellyfin struct {
 	Client *http.Client
 	URL    string // e.g. http://localhost:8096
-	Key    string // R8ER_JELLYFIN_API_KEY
-	User   string // R8ER_JELLYFIN_USER (name); "" = the only user
+	Key    string // STREAMIQ_JELLYFIN_API_KEY
+	User   string // STREAMIQ_JELLYFIN_USER (name); "" = the only user
 
 	mu     sync.Mutex
 	userID string
@@ -70,7 +70,7 @@ func allow(method, p string) bool {
 // the HTTP status to refuse it with.
 func (j *Jellyfin) prepare(rq tunnelReq) (*http.Request, int, error) {
 	if j.Key == "" {
-		return nil, http.StatusServiceUnavailable, fmt.Errorf("R8ER_JELLYFIN_API_KEY not set")
+		return nil, http.StatusServiceUnavailable, fmt.Errorf("STREAMIQ_JELLYFIN_API_KEY not set")
 	}
 	u, err := url.Parse(rq.URL)
 	if err != nil || u.IsAbs() || u.RawPath != "" || u.Path != path.Clean(u.Path) ||
@@ -157,7 +157,7 @@ func (j *Jellyfin) user() (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("jellyfin users: HTTP %d (check R8ER_JELLYFIN_API_KEY)", resp.StatusCode)
+		return "", fmt.Errorf("jellyfin users: HTTP %d (check STREAMIQ_JELLYFIN_API_KEY)", resp.StatusCode)
 	}
 	var users []struct{ Name, Id string }
 	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
@@ -169,5 +169,5 @@ func (j *Jellyfin) user() (string, error) {
 			return u.Id, nil
 		}
 	}
-	return "", fmt.Errorf("jellyfin: %d users and none named %q; set R8ER_JELLYFIN_USER", len(users), j.User)
+	return "", fmt.Errorf("jellyfin: %d users and none named %q; set STREAMIQ_JELLYFIN_USER", len(users), j.User)
 }

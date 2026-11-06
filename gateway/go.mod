@@ -1,4 +1,4 @@
-module r8er/gateway
+module streamiq/gateway
 
 go 1.26.0
 

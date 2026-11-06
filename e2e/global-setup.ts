@@ -22,7 +22,7 @@ export default async function globalSetup() {
   // Firebase emulator image: same Dockerfile as dev + the backend test harness.
   const firebaseImage = await GenericContainer.fromDockerfile(
     path.join(root, 'dev', 'firebase'),
-  ).build('r8er-firebase-emulator:e2e', { deleteOnExit: false })
+  ).build('streamiq-firebase-emulator:e2e', { deleteOnExit: false })
 
   // TURN for the forced-relay step. Fixed host ports: coturn advertises
   // 127.0.0.1 (--external-ip), so host and container ports must match. Offset
@@ -38,9 +38,9 @@ export default async function globalSetup() {
   const [pg, firebase, jellyfin, coturn] = await Promise.all([
     new GenericContainer(pin('postgres'))
       .withEnvironment({
-        POSTGRES_USER: 'r8er',
+        POSTGRES_USER: 'streamiq',
         POSTGRES_PASSWORD: 'dev',
-        POSTGRES_DB: 'r8er',
+        POSTGRES_DB: 'streamiq',
       })
       .withExposedPorts(5432)
       // Twice: the init run restarts the server once before it's really ready.
@@ -62,7 +62,7 @@ export default async function globalSetup() {
         '--only',
         'auth',
         '--project',
-        'demo-r8er',
+        'demo-streamiq',
       ])
       .withExposedPorts(9099)
       .withWaitStrategy(Wait.forLogMessage('All emulators ready'))
@@ -82,7 +82,7 @@ export default async function globalSetup() {
         '--user',
         'e2e:e2e',
         '--realm',
-        'r8er.e2e',
+        'streamiq.e2e',
         '--listening-port',
         String(turnPort),
         '--min-port',
@@ -113,12 +113,12 @@ export default async function globalSetup() {
     (async () => {
       build(
         'dotnet',
-        ['build', 'src/R8er.Api', '--nologo', '-v', 'q'],
+        ['build', 'src/StreamIq.Api', '--nologo', '-v', 'q'],
         path.join(root, 'backend'),
       )
       const bin = path.join(
         os.tmpdir(),
-        `r8er-e2e-gateway${process.platform === 'win32' ? '.exe' : ''}`,
+        `streamiq-e2e-gateway${process.platform === 'win32' ? '.exe' : ''}`,
       )
       build(
         'go',
@@ -139,10 +139,10 @@ export default async function globalSetup() {
       if (r.exitCode !== 0) throw new Error(`jellyfin exec: ${r.output}`)
     })
   await sh(
-    'D="/media/r8er e2e clip" && mkdir -p "$D" && /usr/lib/jellyfin-ffmpeg/ffmpeg -loglevel error -y ' +
+    'D="/media/streamiq e2e clip" && mkdir -p "$D" && /usr/lib/jellyfin-ffmpeg/ffmpeg -loglevel error -y ' +
       '-f lavfi -i testsrc=duration=30:size=640x360:rate=30 -f lavfi -i sine=frequency=440:duration=30 ' +
-      '-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -metadata title="r8er e2e clip" "$D/r8er e2e clip.mp4" && ' +
-      `printf '1\n00:00:00,000 --> 00:00:30,000\nr8er e2e subtitle\n' > "$D/r8er e2e clip.en.srt"`,
+      '-c:v libx264 -pix_fmt yuv420p -c:a aac -shortest -metadata title="streamiq e2e clip" "$D/streamiq e2e clip.mp4" && ' +
+      `printf '1\n00:00:00,000 --> 00:00:30,000\nstreamiq e2e subtitle\n' > "$D/streamiq e2e clip.en.srt"`,
   )
   process.env.E2E_JELLYFIN_API_KEY = await setupJellyfin(
     process.env.E2E_JELLYFIN_URL,
@@ -150,27 +150,27 @@ export default async function globalSetup() {
 
   const apiPort = await freePort()
   const api = `http://127.0.0.1:${apiPort}`
-  const apiDir = path.join(root, 'backend', 'src', 'R8er.Api')
+  const apiDir = path.join(root, 'backend', 'src', 'StreamIq.Api')
   // Picked before the backend starts: it's the backend's CORS allowlist entry.
   const appPort = await freePort()
   process.env.E2E_APP_URL = `http://127.0.0.1:${appPort}`
   const backend = start(
     'backend',
     'dotnet',
-    ['bin/Debug/net10.0/R8er.Api.dll'],
+    ['bin/Debug/net10.0/StreamIq.Api.dll'],
     {
       cwd: apiDir,
       env: {
         ASPNETCORE_ENVIRONMENT: 'Development',
         ASPNETCORE_URLS: api,
-        ConnectionStrings__Default: `Host=${pg.getHost()};Port=${pg.getMappedPort(5432)};Database=r8er;Username=r8er;Password=dev`,
+        ConnectionStrings__Default: `Host=${pg.getHost()};Port=${pg.getMappedPort(5432)};Database=streamiq;Username=streamiq;Password=dev`,
         FIREBASE_AUTH_EMULATOR_HOST: emulator,
-        FIREBASE_PROJECT_ID: 'demo-r8er',
+        FIREBASE_PROJECT_ID: 'demo-streamiq',
         CORS_ORIGINS: process.env.E2E_APP_URL,
         // /turn hands these out (dev path; prod mints Cloudflare creds).
-        R8ER_TURN_URLS: `turn:127.0.0.1:${turnPort}?transport=udp`,
-        R8ER_TURN_USERNAME: 'e2e',
-        R8ER_TURN_CREDENTIAL: 'e2e',
+        STREAMIQ_TURN_URLS: `turn:127.0.0.1:${turnPort}?transport=udp`,
+        STREAMIQ_TURN_USERNAME: 'e2e',
+        STREAMIQ_TURN_CREDENTIAL: 'e2e',
       },
     },
   )
