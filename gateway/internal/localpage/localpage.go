@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"r8er/gateway/internal/pairing"
+	"streamiq/gateway/internal/pairing"
 )
 
 // Guard protects the page. Host must be an IP literal, localhost, or the
@@ -37,9 +37,9 @@ func Guard(lanHost string, h http.Handler) http.Handler {
 var page = template.Must(template.New("page").Parse(`<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <meta http-equiv="refresh" content="3">
-<title>r8er gateway · {{.Name}}</title>
+<title>StreamIQ gateway · {{.Name}}</title>
 <body style="font-family:system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem">
-<h1>r8er gateway · {{.Name}}</h1>
+<h1>StreamIQ gateway · {{.Name}}</h1>
 <p>Control plane: <b>{{if .Online}}online{{else}}offline{{end}}</b> · version <code>{{.Version}}</code></p>
 {{with .Update}}<p style="border:2px solid #06c;padding:.5rem 1rem">Update available: <b>{{.}}</b></p>{{end}}
 <p>Gateway id: <code>{{.GatewayID}}</code></p>

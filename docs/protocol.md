@@ -1,4 +1,4 @@
-# r8er signaling protocol
+# StreamIQ signaling protocol
 
 Contract-first (per CLAUDE.md): onboarding, broker, pairing, tunnel. Codegen
 (C#/Go/TS from one schema) is deferred until the protocol stabilizes; for now
@@ -7,7 +7,7 @@ C# (`Features/Broker`) and TS (`frontend/src/features/pairing`, `frontend/src/tu
 
 ## Gateway onboarding (MVP item 2)
 
-Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`.
+Design: `superpowers/specs/2026-11-01-streamiq-agent-pairing-design.md`.
 Fingerprints everywhere use the form `sha-256 AA:BB:…` (32 upper-case hex
 pairs, SHA-256 over the DER certificate).
 
@@ -62,10 +62,10 @@ per session (several browsers at once).
 
 **`GET /turn`** (Firebase Bearer) → `{iceServers}` for the browser's
 `RTCPeerConnection`. Prod: Cloudflare `generate-ice-servers` (1 h TTL), passed
-through. Dev: `R8ER_TURN_URLS` / `_USERNAME` / `_CREDENTIAL` (compose coturn),
+through. Dev: `STREAMIQ_TURN_URLS` / `_USERNAME` / `_CREDENTIAL` (compose coturn),
 else STUN only. If `/turn` fails the browser falls back to STUN. `?relay` in the
 app URL sets `iceTransportPolicy: "relay"` (diagnostic; the e2e uses it). The
-gateway stays on its own config (STUN, optional `R8ER_ICE_*`): the browser's
+gateway stays on its own config (STUN, optional `STREAMIQ_ICE_*`): the browser's
 relay candidate is enough, as the e2e's forced-relay step shows.
 
 **Telemetry**: once the tunnel is up the browser reads the selected candidate
@@ -84,7 +84,7 @@ that counts too. The same reading drives the player's privacy indicator
 
 ## Pairing + connection auth (MVP item 3)
 
-Design: `superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`. Browser
+Design: `superpowers/specs/2026-11-01-streamiq-agent-pairing-design.md`. Browser
 identity = non-extractable WebCrypto ECDSA P-256 **client key**; its
 fingerprint = `sha-256 AA:…` over the SPKI bytes. The **gateway pin** = the
 gateway's DTLS fingerprint (`a=fingerprint` of the answer SDP). The browser
@@ -97,7 +97,7 @@ it is authorized, the gateway closes every other channel immediately.
 | # | direction | message |
 |---|---|---|
 | 1 | gateway → browser | `{type:"challenge", n}` — n = hex(32 random bytes) |
-| 2 | browser → gateway | `{type:"auth", spki, sig, pair}` (base64; `pair:true` when the browser has no pin matching this gateway cert — forces steps 4–8 even for an allowlisted key, so a changed cert is only accepted via the code). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("r8er-auth-v1\|" + gatewayDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
+| 2 | browser → gateway | `{type:"auth", spki, sig, pair}` (base64; `pair:true` when the browser has no pin matching this gateway cert — forces steps 4–8 even for an allowlisted key, so a changed cert is only accepted via the code). `sig` = ECDSA P-256/SHA-256, **raw r‖s (64 bytes, IEEE P1363)** over `utf8("streamiq-auth-v1\|" + gatewayDtlsFp + "\|" + browserDtlsFp + "\|" + n)` — both DTLS fps of *this* session, so a MITM can't relay it |
 | 3 | gateway → browser | `{type:"ok"}` (key on the allowlist and no `pair` → tunnel channels allowed) or `{type:"unpaired"}` |
 | 4 | browser → gateway | `{type:"commit", h, name}` — h = hex(SHA-256(utf8(nB))), nB = hex(32 random bytes) |
 | 5 | gateway → browser | `{type:"nonce", n: nA}` — only after the commit |
@@ -117,7 +117,7 @@ keyFp     sha-256 40:F0:B4:7F:13:E4:C0:9B:73:86:7F:7A:77:E1:16:71:A2:AF:84:61:A0
 gatewayFp   sha-256 D4:F0:BC:5A:29:DE:06:B5:10:F9:AA:42:8F:1E:ED:BA:92:60:12:B5:91:FE:F7:A5:18:E7:76:A7:C9:BD:18:24
 browserFp sha-256 D4:C3:E8:A1:12:56:AB:82:A4:FC:72:56:0E:B4:A2:B0:E8:7B:AD:82:0C:29:0D:D9:B0:36:16:DE:24:0A:A6:DB
 n         00…01 (64 hex chars)
-sig       x4k+pvKpTAYliFPG+JHOlJbXTRZ8F9qtAO+AH4FqD61nmYmrSo7RLbJ1AaQNWHkXj4kbaOVbwHZkdBK51PiBcg==   (verifies)
+sig       jXq2DxskrRUJ2/lPhsID2biFys0vK47f+Z9XNWopW2mdfxatIsNm8/UtQV6feHlf/U42r5ERviRotv6W8GE0GQ==   (verifies)
 code(gatewayFp, keyFp, nA="11"×32, nB="22"×32) = 138781
 ```
 
@@ -163,16 +163,16 @@ key redaction in text responses (below).
 
 ### Jellyfin policy (gateway, `gateway/internal/tunnel/jellyfin.go`)
 
-The browser authenticates to r8er, never to Jellyfin, and a paired browser
+The browser authenticates to StreamIQ, never to Jellyfin, and a paired browser
 stays a *viewer*:
 
 - **Credential injection.** The gateway holds the Jellyfin API key
-  (`R8ER_JELLYFIN_API_KEY`) and sets `Authorization: MediaBrowser Token="…"`.
+  (`STREAMIQ_JELLYFIN_API_KEY`) and sets `Authorization: MediaBrowser Token="…"`.
   It drops browser-sent `Authorization`, `Cookie`, `X-Emby-*` and
   `X-MediaBrowser-*` headers, and `api_key`/`ApiKey` query parameters.
 - **User pinning.** Every request gets `userId=<household user>`, and any
   browser-sent `userId` is dropped. The household user is
-  `R8ER_JELLYFIN_USER` (a name), or the only Jellyfin user if there is one;
+  `STREAMIQ_JELLYFIN_USER` (a name), or the only Jellyfin user if there is one;
   it's resolved lazily and cached. Tenant = household = one Jellyfin user.
 - **Allowlist.** An API key is admin, so only these pass (anything else is `403`):
 

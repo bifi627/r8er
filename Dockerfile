@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# r8er image for Railway: control plane (API + WebRTC signaling) + the built SPA,
+# streamiq image for Railway: control plane (API + WebRTC signaling) + the built SPA,
 # served same-origin from wwwroot (no CORS in prod).
 # Railway service Root Directory = repo root (build context needs backend/ + frontend/).
 # Base tags float at patch level on purpose — they pick up security updates.
@@ -22,10 +22,10 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 # Restore against just the API project (the test project isn't in the image).
 # Separate COPY so this layer caches until the csproj itself changes.
-COPY backend/src/R8er.Api/R8er.Api.csproj src/R8er.Api/
-RUN dotnet restore src/R8er.Api/R8er.Api.csproj
+COPY backend/src/StreamIq.Api/StreamIq.Api.csproj src/StreamIq.Api/
+RUN dotnet restore src/StreamIq.Api/StreamIq.Api.csproj
 COPY backend/src/ src/
-RUN dotnet publish src/R8er.Api/R8er.Api.csproj -c Release -o /app --no-restore
+RUN dotnet publish src/StreamIq.Api/StreamIq.Api.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
@@ -38,4 +38,4 @@ COPY --from=web /web/dist ./wwwroot
 # fine while nothing keys on the client IP. Item 6 rate limiting must not trust
 # a client-spoofable X-Forwarded-For.
 ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-ENTRYPOINT ["dotnet", "R8er.Api.dll"]
+ENTRYPOINT ["dotnet", "StreamIq.Api.dll"]

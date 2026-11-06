@@ -16,8 +16,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6 # reads global.json
-      - run: dotnet format backend/R8er.slnx --verify-no-changes
-      - run: dotnet test backend/R8er.slnx --nologo
+      - run: dotnet format backend/StreamIq.slnx --verify-no-changes
+      - run: dotnet test backend/StreamIq.slnx --nologo
       - run: docker compose config --quiet && docker compose --profile relay config --quiet
 
   frontend:

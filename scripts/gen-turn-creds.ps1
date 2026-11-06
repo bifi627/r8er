@@ -61,8 +61,8 @@ $resp.iceServers | ConvertTo-Json -Depth 6
 # --- Gateway env (run the home gateway with Cloudflare TURN) --------------------
 Write-Host "`n=== Home gateway (PowerShell) ===" -ForegroundColor Cyan
 Write-Host @"
-`$env:R8ER_ICE_URLS     = "$urls"
-`$env:R8ER_ICE_USERNAME = "$user"
-`$env:R8ER_ICE_CREDENTIAL = "$cred"
+`$env:STREAMIQ_ICE_URLS     = "$urls"
+`$env:STREAMIQ_ICE_USERNAME = "$user"
+`$env:STREAMIQ_ICE_CREDENTIAL = "$cred"
 go run ./cmd/gateway      # from the gateway/ directory
 "@

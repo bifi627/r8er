@@ -16,9 +16,9 @@ import (
 
 	"github.com/pion/webrtc/v4"
 
-	"r8er/gateway/internal/identity"
-	"r8er/gateway/internal/pairing"
-	"r8er/gateway/internal/tunnel"
+	"streamiq/gateway/internal/identity"
+	"streamiq/gateway/internal/pairing"
+	"streamiq/gateway/internal/tunnel"
 )
 
 // A browser (played by a second Pion peer) is refused tunnel channels until it

@@ -1,4 +1,4 @@
-# r8er
+# StreamIQ
 
 Multi-tenant media platform: users stream their home media (NAS/PC) from a
 browser anywhere, with **zero router configuration** — WebRTC data-channel
@@ -10,10 +10,10 @@ user's hardware.
 All design lives in `docs/superpowers/specs/` (all dated 2026-07-05).
 Authority order when they disagree:
 
-1. `…-r8er-implementation-plan.md` — **phasing, stack, checkpoints. Start here.**
-2. `…-r8er-feasibility-design.md` — architecture rationale, risks, privacy rules, cost model
-3. `…-r8er-handover-notes.md` — **fine print + what-if hedges. Read before writing tunnel/gateway/auth code.**
-4. `…-r8er-dev-environment.md` — dev env & testing strategy (this scaffold implements it)
+1. `…-streamiq-implementation-plan.md` — **phasing, stack, checkpoints. Start here.**
+2. `…-streamiq-feasibility-design.md` — architecture rationale, risks, privacy rules, cost model
+3. `…-streamiq-handover-notes.md` — **fine print + what-if hedges. Read before writing tunnel/gateway/auth code.**
+4. `…-streamiq-dev-environment.md` — dev env & testing strategy (this scaffold implements it)
 
 Tool/service inventory + every credential and how to rotate it: `docs/tools.md`.
 **Update it in the same diff** whenever a tool/service or credential is added,
@@ -40,7 +40,7 @@ Firebase Auth emulator, real tokens minted through the prod verify path; behavio
 covered by Reqnroll (isolation/provisioning/auth-reject) + xUnit edges. React:
 Firebase sign-in + empty authed shell.
 
-**Items 2+3** (design: `docs/superpowers/specs/2026-11-01-r8er-agent-pairing-design.md`,
+**Items 2+3** (design: `docs/superpowers/specs/2026-11-01-streamiq-agent-pairing-design.md`,
 supersedes the plan's QR/claim-code sketch; it predates the rename below). **PR A
 (onboarding):** migration #2, enrollment token → `/gateways/enroll` → credential,
 authenticated `/gateways/ws` heartbeat, persistent 10-year gateway DTLS cert + state dir,
@@ -48,7 +48,7 @@ local gateway page (Host/Origin guard), Gateways list. **PR B (broker + pairing)
 tenant-scoped broker (`/broker/ws`, session routing), browser WebCrypto client key,
 session-bound connection auth, commit/reveal comparison code approved on the gateway
 page, allowlist, pins enforced both directions; protocol in `docs/protocol.md`.
-**Item 4 — productized gateway** (design: `docs/superpowers/specs/2026-11-04-r8er-gateway-productization-design.md`;
+**Item 4 — productized gateway** (design: `docs/superpowers/specs/2026-11-04-streamiq-gateway-productization-design.md`;
 pivoted from a Docker sidecar after a spike: on Docker Desktop, a containerized gateway gets
 relayed on cellular). **PR A (in progress):** native binaries on GitHub Releases
 (`gateway-v*` tag → `release-gateway.yml`), `install.sh`/`install.ps1` (install = update,
@@ -58,14 +58,14 @@ User guide: `docs/install.md`. Dev ports moved to 18096 (Jellyfin) / 18097 (gate
 so an installed copy runs on the defaults alongside dev. PR B: Jellyfin key without manual
 steps, optional pinned Jellyfin compose, status page.
 
-**Item 5 — streaming client** (design: `docs/superpowers/specs/2026-11-02-r8er-streaming-client-design.md`;
+**Item 5 — streaming client** (design: `docs/superpowers/specs/2026-11-02-streamiq-streaming-client-design.md`;
 consumption-only, functional UI). **PR A (watch it):** Gateways → Open → library /
 series / episodes → hls.js player over the tunnel (custom loader), subtitles, resume
-via Jellyfin UserData. The gateway owns the Jellyfin API key (`R8ER_JELLYFIN_API_KEY`;
+via Jellyfin UserData. The gateway owns the Jellyfin API key (`STREAMIQ_JELLYFIN_API_KEY`;
 dev: `scripts/setup-jellyfin.sh`): it injects the key, pins the household user, lets
 only an endpoint allowlist through, and redacts the key from playlists. All POC
 paths are deleted. **PR B (trust it):** `GET /turn` (Cloudflare creds in prod,
-`R8ER_TURN_*` coturn in dev), `connection_sessions` telemetry (migration #4, drops
+`STREAMIQ_TURN_*` coturn in dev), `connection_sessions` telemetry (migration #4, drops
 the POC's `poc_connectivity`), privacy indicator (direct vs relayed); `?relay`
 forces the relay path. **Hosting:** the root `Dockerfile` builds the SPA into the
 API image (`wwwroot`, same origin, no CORS in prod); Railway Root Directory = repo root.
@@ -74,8 +74,12 @@ Next: item 6 (hardening).
 **Glossary** (renamed 2026-11-02, migration #3): **gateway** = the home box that
 tunnels Jellyfin (was "agent" / `Device`); **client** = a paired browser (was
 "browser device"; its key = client key); **API** = the control plane (`backend/`,
-`R8ER_API_URL`). "Media server" means Jellyfin only; "relay" means TURN only.
+`STREAMIQ_API_URL`). "Media server" means Jellyfin only; "relay" means TURN only.
 Dated specs/plans keep the old words.
+**Project name:** StreamIQ (was "r8er" until 2026-11-06). Code forms: `streamiq` (paths,
+module, DB, binaries), `StreamIq` (.NET namespaces/types), `STREAMIQ_` (env vars); "StreamIQ"
+in user-visible text. Don't reintroduce the old name (historical records such as
+`docs/poc-connectivity-spike.md` keep it: those URLs/env vars really were `r8er`).
 
 ## Stack & layout
 
@@ -89,7 +93,7 @@ Dated specs/plans keep the old words.
 | `dev/firebase/` | Auth emulator config for compose | — |
 
 **Vertical slices** (code organized by feature, not by layer):
-- API: `backend/src/R8er.Api/Features/<Slice>/<UseCase>.cs` — one static class per
+- API: `backend/src/StreamIq.Api/Features/<Slice>/<UseCase>.cs` — one static class per
   use case with `Map(app)` + its handler, request/response types inline; mapped
   explicitly in `Program.cs` (no MediatR, no assembly scanning). Shared kernel only:
   `Data/` (DbContext, entities, migrations, tenant filter) and `Auth/`.
@@ -113,8 +117,8 @@ docker compose up -d                    # deps: postgres, jellyfin, firebase aut
 docker compose --profile relay up -d    # + local coturn (force relay via iceTransportPolicy)
 bash scripts/gen-test-media.sh          # generate dev-media/ fixtures (needs ffmpeg)
 
-dotnet run --project backend/src/R8er.Api     # backend (or: dotnet watch)
-dotnet test backend/R8er.slnx                 # backend tests (Testcontainers → needs Docker)
+dotnet run --project backend/src/StreamIq.Api     # backend (or: dotnet watch)
+dotnet test backend/StreamIq.slnx                 # backend tests (Testcontainers → needs Docker)
 npm run dev --prefix frontend                 # frontend
 npm run build --prefix frontend               # frontend build check
 go run ./cmd/gateway                          # gateway (from gateway/; reads gateway/gateway.env from setup-jellyfin.sh)

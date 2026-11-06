@@ -32,10 +32,10 @@ jobs:
             os="${t%/*}" arch="${t#*/}" ext=""
             [ "$os" = windows ] && ext=".exe"
             CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
-              -ldflags "-s -w -X main.version=$v" -o "../dist/r8er-gateway-$os-$arch$ext" ./cmd/gateway
+              -ldflags "-s -w -X main.version=$v" -o "../dist/streamiq-gateway-$os-$arch$ext" ./cmd/gateway
           done
           cp install/install.sh install/install.ps1 ../dist/
-          (cd ../dist && sha256sum r8er-gateway-* > SHA256SUMS)
+          (cd ../dist && sha256sum streamiq-gateway-* > SHA256SUMS)
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}

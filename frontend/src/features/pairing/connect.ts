@@ -137,7 +137,7 @@ export async function connect(
       } else if (m.type === 'answer') {
         gatewayFp = sdpFingerprint(m.sdp.sdp)
         // Before a single byte goes to the gateway: an unexpected certificate means
-        // someone (possibly r8er's own server) is in the middle. Pairing again is
+        // someone (possibly StreamIQ's own server) is in the middle. Pairing again is
         // allowed: the comparison code authenticates the new certificate.
         verdict = pinCheck(pin, gatewayFp, !!onCode)
         if (verdict === 'refuse')

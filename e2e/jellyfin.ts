@@ -1,8 +1,8 @@
 // Completes Jellyfin's first-run wizard over its HTTP API and returns an API key
-// for the gateway (R8ER_JELLYFIN_API_KEY). Test-only: in dev the owner does this
+// for the gateway (STREAMIQ_JELLYFIN_API_KEY). Test-only: in dev the owner does this
 // once by hand in the Jellyfin dashboard. Media is expected at /media.
 const AUTH =
-  'MediaBrowser Client="r8er-e2e", Device="e2e", DeviceId="r8er-e2e", Version="1"'
+  'MediaBrowser Client="streamiq-e2e", Device="e2e", DeviceId="streamiq-e2e", Version="1"'
 
 export async function setupJellyfin(base: string): Promise<string> {
   const call = async (path: string, init: RequestInit = {}, token?: string) => {
@@ -36,13 +36,13 @@ export async function setupJellyfin(base: string): Promise<string> {
     }
   }
   await call('/Startup/User') // the wizard creates the first user lazily on GET
-  await post('/Startup/User', { Name: 'r8er', Password: 'r8er-e2e' })
+  await post('/Startup/User', { Name: 'streamiq', Password: 'streamiq-e2e' })
   await post('/Startup/RemoteAccess', { EnableRemoteAccess: true })
   await post('/Startup/Complete', {})
 
   const login = await post('/Users/AuthenticateByName', {
-    Username: 'r8er',
-    Pw: 'r8er-e2e',
+    Username: 'streamiq',
+    Pw: 'streamiq-e2e',
   })
   const token: string = login.AccessToken
   await post(
@@ -50,10 +50,10 @@ export async function setupJellyfin(base: string): Promise<string> {
     { LibraryOptions: { EnableInternetProviders: false } },
     token,
   )
-  await call('/Auth/Keys?app=r8er', { method: 'POST' }, token)
+  await call('/Auth/Keys?app=streamiq', { method: 'POST' }, token)
   const keys = await call('/Auth/Keys', {}, token)
   const key: string = keys.Items.find(
-    (k: { AppName: string }) => k.AppName === 'r8er',
+    (k: { AppName: string }) => k.AppName === 'streamiq',
   ).AccessToken
 
   // The scan is async, and the one refreshLibrary=true starts can race the new

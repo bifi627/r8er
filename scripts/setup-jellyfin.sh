@@ -13,9 +13,9 @@
 set -euo pipefail
 
 BASE="http://localhost:18096"   # dev port (docker-compose.yml)
-USER_NAME="r8er"
-USER_PW="${JELLYFIN_DEV_PW:-r8erdev}"
-AUTH_HDR='MediaBrowser Client="r8er-setup", Device="setup", DeviceId="r8er-setup", Version="0.0.1"'
+USER_NAME="streamiq"
+USER_PW="${JELLYFIN_DEV_PW:-streamiqdev}"
+AUTH_HDR='MediaBrowser Client="streamiq-setup", Device="setup", DeviceId="streamiq-setup", Version="0.0.1"'
 
 # node -e helper: read stdin JSON, print the value at a dotted/indexed path.
 jget() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const o=JSON.parse(s);let v=o;for(const k of process.argv[1].split("."))v=Array.isArray(v)?v[+k]:v?.[k];process.stdout.write(String(v??""))})' "$1"; }
@@ -23,7 +23,7 @@ jget() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const 
 echo "== 1/7 wiping Jellyfin config volume (fresh wizard) =="
 docker compose stop jellyfin >/dev/null 2>&1 || true
 docker compose rm -f jellyfin  >/dev/null 2>&1 || true
-docker volume rm r8er_jellyfin-config r8er_jellyfin-cache >/dev/null 2>&1 || true
+docker volume rm streamiq_jellyfin-config streamiq_jellyfin-cache >/dev/null 2>&1 || true
 docker compose up -d jellyfin >/dev/null
 
 echo "== 2/7 waiting for Jellyfin to come up =="
@@ -80,9 +80,9 @@ ITEM_ID="${ITEM_ID:-$FIRST_ID}"
 [ -n "$ITEM_ID" ] || { echo "scan produced no movie items"; exit 1; }
 
 echo "== 7/7 minting gateway API key =="
-curl -fsS -X POST "$BASE/Auth/Keys?app=r8er-gateway" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
+curl -fsS -X POST "$BASE/Auth/Keys?app=streamiq-gateway" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" >/dev/null || true
 API_KEY=$(curl -fsS "$BASE/Auth/Keys" -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
-  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const k=(JSON.parse(s).Items||[]).find(x=>x.AppName==="r8er-gateway");process.stdout.write(k?k.AccessToken:"")})')
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const k=(JSON.parse(s).Items||[]).find(x=>x.AppName==="streamiq-gateway");process.stdout.write(k?k.AccessToken:"")})')
 [ -n "$API_KEY" ] || API_KEY="$TOKEN"   # fall back to the session token
 
 # Persist for the harness / gateway. Git-ignored: throwaway dev creds.
@@ -101,6 +101,6 @@ echo "  hevc+ac3:   ${HEVC_ID:-<none — run gen-test-media.sh then re-run>} (fo
 echo "  wrote:      $OUT"
 
 # The dev gateway (go run in gateway/) reads gateway/gateway.env: dev ports, so
-# an installed r8er on 8096/8097 can run alongside. Git-ignored.
-printf 'R8ER_ORIGIN=%s\nR8ER_PAGE_PORT=18097\nR8ER_JELLYFIN_API_KEY=%s\n' "$BASE" "$API_KEY" > gateway/gateway.env
+# an installed streamiq on 8096/8097 can run alongside. Git-ignored.
+printf 'STREAMIQ_ORIGIN=%s\nSTREAMIQ_PAGE_PORT=18097\nSTREAMIQ_JELLYFIN_API_KEY=%s\n' "$BASE" "$API_KEY" > gateway/gateway.env
 echo "  wrote:      gateway/gateway.env (dev gateway: Jellyfin origin, page :18097, API key)"

@@ -29,7 +29,7 @@ folder, rescan, fix metadata) — implicitly item 4's job, which is deferred.
 Today: owner sets Jellyfin up once by hand in its own dashboard
 (`http://localhost:8096`; dev: `scripts/setup-jellyfin.sh`). Plan: small admin section on the LAN-only gateway
 page (`:8097`) that drives Jellyfin's API — folder picker + rescan; stays
-local, so nothing sensitive crosses the control plane. Not in the r8er web app
+local, so nothing sensitive crosses the control plane. Not in the StreamIQ web app
 (remote admin = new attack surface).
 
 **When:** with item 4 (productized gateway), or once a non-owner household installs.

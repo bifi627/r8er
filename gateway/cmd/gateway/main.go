@@ -1,4 +1,4 @@
-// r8er gateway. Wiring only — each feature lives in its own package under
+// StreamIQ gateway. Wiring only — each feature lives in its own package under
 // internal/ (vertical slices):
 //
 //	identity    persistent DTLS certificate + fingerprint (browsers pin it)
@@ -10,9 +10,9 @@
 //	update      "newer release available" notice (never self-updates)
 //
 // Config (env, or gateway.env next to the binary / in the working dir; real
-// env wins): R8ER_API_URL (required), R8ER_ENROLL_TOKEN, R8ER_NAME, R8ER_STATE_DIR,
-// R8ER_PAGE_PORT, R8ER_LAN_URL, R8ER_ORIGIN, R8ER_JELLYFIN_API_KEY,
-// R8ER_JELLYFIN_USER, R8ER_ICE_* (R8ER_ICE_PORT: Docker, see sessions.NewAPI).
+// env wins): STREAMIQ_API_URL (required), STREAMIQ_ENROLL_TOKEN, STREAMIQ_NAME, STREAMIQ_STATE_DIR,
+// STREAMIQ_PAGE_PORT, STREAMIQ_LAN_URL, STREAMIQ_ORIGIN, STREAMIQ_JELLYFIN_API_KEY,
+// STREAMIQ_JELLYFIN_USER, STREAMIQ_ICE_* (STREAMIQ_ICE_PORT: Docker, see sessions.NewAPI).
 package main
 
 import (
@@ -30,13 +30,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"r8er/gateway/internal/identity"
-	"r8er/gateway/internal/localpage"
-	"r8er/gateway/internal/onboarding"
-	"r8er/gateway/internal/pairing"
-	"r8er/gateway/internal/sessions"
-	"r8er/gateway/internal/tunnel"
-	"r8er/gateway/internal/update"
+	"streamiq/gateway/internal/identity"
+	"streamiq/gateway/internal/localpage"
+	"streamiq/gateway/internal/onboarding"
+	"streamiq/gateway/internal/pairing"
+	"streamiq/gateway/internal/sessions"
+	"streamiq/gateway/internal/tunnel"
+	"streamiq/gateway/internal/update"
 )
 
 // version is set at build time (-ldflags -X main.version=…; see Dockerfile).
@@ -52,7 +52,7 @@ func main() {
 	}
 	loadEnvFile("gateway.env") // dev: gateway/gateway.env from scripts/setup-jellyfin.sh
 
-	stateDir := env("R8ER_STATE_DIR", "r8er-state")
+	stateDir := env("STREAMIQ_STATE_DIR", "streamiq-state")
 	cert, fp, err := identity.LoadOrCreate(stateDir)
 	if err != nil {
 		log.Fatalf("gateway: certificate: %v", err)
@@ -68,27 +68,27 @@ func main() {
 	// browser asked for and hand back exactly what the origin sent.
 	jf := &tunnel.Jellyfin{
 		Client: &http.Client{Transport: &http.Transport{DisableCompression: true}},
-		URL:    env("R8ER_ORIGIN", "http://localhost:8096"), // local Jellyfin
-		Key:    os.Getenv("R8ER_JELLYFIN_API_KEY"),
-		User:   os.Getenv("R8ER_JELLYFIN_USER"),
+		URL:    env("STREAMIQ_ORIGIN", "http://localhost:8096"), // local Jellyfin
+		Key:    os.Getenv("STREAMIQ_JELLYFIN_API_KEY"),
+		User:   os.Getenv("STREAMIQ_JELLYFIN_USER"),
 	}
 	if jf.Key == "" {
-		log.Printf("gateway: R8ER_JELLYFIN_API_KEY not set — pairing works, playback refused (create a key in the Jellyfin dashboard)")
+		log.Printf("gateway: STREAMIQ_JELLYFIN_API_KEY not set — pairing works, playback refused (create a key in the Jellyfin dashboard)")
 	}
 
 	// Enroll once, then heartbeat over the authenticated control socket and
 	// serve the local page.
-	api := strings.TrimRight(os.Getenv("R8ER_API_URL"), "/")
+	api := strings.TrimRight(os.Getenv("STREAMIQ_API_URL"), "/")
 	if api == "" {
-		log.Fatal("gateway: R8ER_API_URL not set (use the install command from the web app)")
+		log.Fatal("gateway: STREAMIQ_API_URL not set (use the install command from the web app)")
 	}
 	{
-		st, err := onboarding.LoadOrEnroll(ctx, stateDir, api, os.Getenv("R8ER_ENROLL_TOKEN"), fp)
+		st, err := onboarding.LoadOrEnroll(ctx, stateDir, api, os.Getenv("STREAMIQ_ENROLL_TOKEN"), fp)
 		if err != nil {
 			log.Fatalf("gateway: %v", err)
 		}
 		log.Printf("gateway: id %s (%s)", st.GatewayID, st.Name)
-		port := env("R8ER_PAGE_PORT", "8097") // Jellyfin owns 8096
+		port := env("STREAMIQ_PAGE_PORT", "8097") // Jellyfin owns 8096
 		lan := onboarding.LANURL(port)
 		lanHost := ""
 		if u, err := url.Parse(lan); err == nil {

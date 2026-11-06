@@ -24,7 +24,7 @@ const (
 // records the last request so tests can see what the gateway forwarded.
 func fakeJellyfin(t *testing.T, users string) (*Jellyfin, *http.Request) {
 	t.Helper()
-	payload := bytes.Repeat([]byte("r8er-"), 400) // 2000 bytes
+	payload := bytes.Repeat([]byte("data-"), 400) // 2000 bytes
 	last := &http.Request{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != `MediaBrowser Token="`+key+`"` {
@@ -169,7 +169,7 @@ func TestUserResolution(t *testing.T) {
 	j, _ := fakeJellyfin(t, two)
 	raw, _ := json.Marshal(tunnelReq{Method: "GET", URL: "/UserViews"})
 	if status, _, _, err := proxy(j, raw); status != http.StatusBadGateway || err == nil {
-		t.Fatalf("two users, no R8ER_JELLYFIN_USER: status %d, want 502", status)
+		t.Fatalf("two users, no STREAMIQ_JELLYFIN_USER: status %d, want 502", status)
 	}
 	j.User = "home" // case-insensitive
 	if got, err := j.user(); got != uid || err != nil {

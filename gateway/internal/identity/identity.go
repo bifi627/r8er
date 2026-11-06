@@ -1,5 +1,5 @@
 // Package identity is the gateway's long-term DTLS identity: one persistent
-// certificate whose Fingerprint browsers pin (design: specs/2026-11-01-r8er-
+// certificate whose Fingerprint browsers pin (design: specs/2026-11-01-streamiq-
 // agent-pairing-design.md, "Gateway certificate").
 package identity
 
@@ -37,7 +37,7 @@ func LoadOrCreate(dir string) (*webrtc.Certificate, string, error) {
 		serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 127))
 		cert, err := webrtc.NewCertificate(key, x509.Certificate{
 			SerialNumber: serial,
-			Subject:      pkix.Name{CommonName: "r8er-gateway"},
+			Subject:      pkix.Name{CommonName: "streamiq-gateway"},
 			NotBefore:    time.Now().Add(-time.Hour),
 			NotAfter:     time.Now().AddDate(10, 0, 0),
 		})

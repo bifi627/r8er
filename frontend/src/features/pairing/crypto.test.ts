@@ -21,7 +21,7 @@ const v = {
   browserFp:
     'sha-256 D4:C3:E8:A1:12:56:AB:82:A4:FC:72:56:0E:B4:A2:B0:E8:7B:AD:82:0C:29:0D:D9:B0:36:16:DE:24:0A:A6:DB',
   n: '0'.repeat(63) + '1',
-  sig: 'x4k+pvKpTAYliFPG+JHOlJbXTRZ8F9qtAO+AH4FqD61nmYmrSo7RLbJ1AaQNWHkXj4kbaOVbwHZkdBK51PiBcg==',
+  sig: 'jXq2DxskrRUJ2/lPhsID2biFys0vK47f+Z9XNWopW2mdfxatIsNm8/UtQV6feHlf/U42r5ERviRotv6W8GE0GQ==',
 }
 const raw = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 const ecdsa = { name: 'ECDSA', hash: 'SHA-256' }

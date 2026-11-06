@@ -3,7 +3,7 @@
 import { fingerprint } from './crypto'
 
 const db = new Promise<IDBDatabase>((resolve, reject) => {
-  const r = indexedDB.open('r8er', 1)
+  const r = indexedDB.open('streamiq', 1)
   r.onupgradeneeded = () => r.result.createObjectStore('kv')
   r.onsuccess = () => resolve(r.result)
   r.onerror = () => reject(r.error)

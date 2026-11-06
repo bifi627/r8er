@@ -1,4 +1,4 @@
-// Package pairing is the gateway side of flow 2 (design: specs/2026-11-01-r8er-
+// Package pairing is the gateway side of flow 2 (design: specs/2026-11-01-streamiq-
 // agent-pairing-design.md): verify a browser's session-bound client-key
 // signature, compute the commit/reveal comparison code, and keep the allowlist
 // of paired browsers plus the pending requests the local page approves.
@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"r8er/gateway/internal/identity"
+	"streamiq/gateway/internal/identity"
 )
 
 const (
@@ -34,7 +34,7 @@ const (
 // both DTLS fingerprints of *this* session, so a MITM terminating two separate
 // DTLS sessions can't relay a valid signature.
 func AuthMessage(gatewayFp, browserDtlsFp, challenge string) []byte {
-	return []byte("r8er-auth-v1|" + gatewayFp + "|" + browserDtlsFp + "|" + challenge)
+	return []byte("streamiq-auth-v1|" + gatewayFp + "|" + browserDtlsFp + "|" + challenge)
 }
 
 // VerifyAuth checks sig (WebCrypto's raw 64-byte r‖s, not ASN.1) over

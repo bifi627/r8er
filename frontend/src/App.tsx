@@ -32,7 +32,7 @@ function SignIn() {
     <main
       style={{ maxWidth: 320, margin: '4rem auto', display: 'grid', gap: 8 }}
     >
-      <h1>r8er</h1>
+      <h1>StreamIQ</h1>
       <input
         placeholder="email"
         value={email}

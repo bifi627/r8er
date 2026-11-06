@@ -15,7 +15,7 @@ const (
 	vecGatewayFp = "sha-256 D4:F0:BC:5A:29:DE:06:B5:10:F9:AA:42:8F:1E:ED:BA:92:60:12:B5:91:FE:F7:A5:18:E7:76:A7:C9:BD:18:24"
 	vecBrowser   = "sha-256 D4:C3:E8:A1:12:56:AB:82:A4:FC:72:56:0E:B4:A2:B0:E8:7B:AD:82:0C:29:0D:D9:B0:36:16:DE:24:0A:A6:DB"
 	vecN         = "0000000000000000000000000000000000000000000000000000000000000001"
-	vecSig       = "x4k+pvKpTAYliFPG+JHOlJbXTRZ8F9qtAO+AH4FqD61nmYmrSo7RLbJ1AaQNWHkXj4kbaOVbwHZkdBK51PiBcg=="
+	vecSig       = "jXq2DxskrRUJ2/lPhsID2biFys0vK47f+Z9XNWopW2mdfxatIsNm8/UtQV6feHlf/U42r5ERviRotv6W8GE0GQ=="
 )
 
 func b64(s string) []byte { b, _ := base64.StdEncoding.DecodeString(s); return b }
