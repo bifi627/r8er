@@ -55,7 +55,9 @@ func fakeJellyfin(t *testing.T, users string) (*Jellyfin, *http.Request) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return &Jellyfin{Client: http.DefaultClient, URL: srv.URL, Key: key}, last
+	j := &Jellyfin{Client: http.DefaultClient, URL: srv.URL}
+	j.SetKey(key, "")
+	return j, last
 }
 
 const oneUser = `[{"Name":"home","Id":"` + uid + `"}]`

@@ -4,11 +4,13 @@
 package localpage
 
 import (
+	"context"
 	"html/template"
 	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"streamiq/gateway/internal/pairing"
 )
@@ -36,13 +38,33 @@ func Guard(lanHost string, h http.Handler) http.Handler {
 
 var page = template.Must(template.New("page").Parse(`<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<meta http-equiv="refresh" content="3">
+{{if not .Jellyfin.NeedsLogin}}<meta http-equiv="refresh" content="3">{{end}}
 <title>StreamIQ gateway · {{.Name}}</title>
 <body style="font-family:system-ui;max-width:40rem;margin:2rem auto;padding:0 1rem">
 <h1>StreamIQ gateway · {{.Name}}</h1>
-<p>Control plane: <b>{{if .Online}}online{{else}}offline{{end}}</b> · version <code>{{.Version}}</code></p>
-{{with .Update}}<p style="border:2px solid #06c;padding:.5rem 1rem">Update available: <b>{{.}}</b></p>{{end}}
-<p>Gateway id: <code>{{.GatewayID}}</code></p>
+<h2>Status</h2>
+<ul>
+<li>Version <code>{{.Version}}</code>{{with .Update}} · <b style="color:#06c">update available: {{.}}</b>{{end}}</li>
+<li>StreamIQ: {{if .LastBeat}}<b>connected</b> · last heartbeat {{.LastBeat.Format "15:04:05"}}{{else}}<b style="color:#c00">not connected</b>{{end}}</li>
+{{with .Jellyfin}}
+<li>Jellyfin: {{if .Reachable}}<b>reachable</b> · version {{.Version}}
+{{if .Untested}} · <b style="color:#c80">not tested with this gateway (tested: {{.Tested}}.x)</b>{{end}}
+{{else}}<b style="color:#c00">not reachable</b>{{end}}
+· API key: {{if .HasKey}}<b>set</b>{{if .User}} (user {{.User}}){{end}}{{else}}<b style="color:#c00">missing</b>, playback refused{{end}}</li>
+{{if .Err}}<li style="color:#c00">{{.Err}}</li>{{end}}
+{{end}}
+</ul>
+{{with .Jellyfin}}{{if .Password}}
+<p style="border:2px solid #888;padding:.5rem 1rem">This gateway set up Jellyfin. Jellyfin admin:
+<b>{{.User}}</b> · password <code>{{.Password}}</code></p>{{end}}
+{{if .NeedsLogin}}
+<form method="post" action="/jellyfin/login" style="border:2px solid #c80;padding:.5rem 1rem">
+<p><b>Connect Jellyfin.</b> Sign in once with a Jellyfin administrator. The gateway creates an
+API key with it and keeps only the key, not the password. Playback uses this user's library.</p>
+<p><input name="user" placeholder="Jellyfin user" required autocomplete="username">
+<input name="pw" type="password" placeholder="Password" autocomplete="current-password">
+<button>Connect</button></p>
+</form>{{end}}{{end}}
 <h2>Pairing requests</h2>
 {{range .Pending}}
 <form method="post" action="/decide" style="border:2px solid #c80;padding:.5rem 1rem;margin:.5rem 0">
@@ -57,30 +79,52 @@ var page = template.Must(template.New("page").Parse(`<!doctype html>
 <form method="post" action="/remove"><input type="hidden" name="keyFp" value="{{.KeyFp}}">
 {{.Name}} <small>(since {{.AddedAt.Format "2006-01-02"}})</small> <button>Remove</button></form>
 {{else}}<p>None yet.</p>{{end}}
-<p><small>DTLS fingerprint (browsers pin this):<br><code style="word-break:break-all">{{.Fingerprint}}</code></small></p>
+<p><small>Gateway id: <code>{{.GatewayID}}</code><br>
+DTLS fingerprint (browsers pin this):<br><code style="word-break:break-all">{{.Fingerprint}}</code></small></p>
 </body>`))
 
-// Handler renders the page and takes the Approve/Reject/Remove posts. Only
-// someone on the home LAN reaches it, and Guard stops other sites driving it.
-// update holds the update notice ("" = up to date), set by the release check.
-func Handler(name, gatewayID, fp, version string, online *atomic.Bool, update *atomic.Pointer[string], store *pairing.Store) http.Handler {
+// Config is what the page shows and drives.
+type Config struct {
+	Name, GatewayID, Fingerprint, Version string
+	LastBeat                              *atomic.Int64           // unix time of the last heartbeat, 0 = disconnected
+	Update                                *atomic.Pointer[string] // update notice, "" = up to date
+	Store                                 *pairing.Store
+	Jellyfin                              func() any                                       // status snapshot (jellyfin.View)
+	Login                                 func(ctx context.Context, user, pw string) error // mint a Jellyfin key
+}
+
+// Handler renders the status page and takes the Approve/Reject/Remove and
+// Jellyfin login posts. Only someone on the home LAN reaches it, and Guard
+// stops other sites driving it.
+func Handler(c Config) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		var beat any // nil renders "not connected"
+		if t := c.LastBeat.Load(); t != 0 {
+			beat = time.Unix(t, 0)
+		}
 		page.Execute(w, map[string]any{
-			"Name": name, "GatewayID": gatewayID, "Fingerprint": fp, "Online": online.Load(),
-			"Version": version, "Update": *update.Load(),
-			"Pending": store.Pending(), "Paired": store.Paired(),
+			"Name": c.Name, "GatewayID": c.GatewayID, "Fingerprint": c.Fingerprint,
+			"Version": c.Version, "Update": *c.Update.Load(), "LastBeat": beat,
+			"Jellyfin": c.Jellyfin(), "Pending": c.Store.Pending(), "Paired": c.Store.Paired(),
 		})
 	})
+	mux.HandleFunc("POST /jellyfin/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := c.Login(r.Context(), r.FormValue("user"), r.FormValue("pw")); err != nil {
+			http.Error(w, "Jellyfin sign-in failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
 	mux.HandleFunc("POST /decide", func(w http.ResponseWriter, r *http.Request) {
-		if err := store.Decide(r.FormValue("id"), r.FormValue("approve") == "1"); err != nil {
+		if err := c.Store.Decide(r.FormValue("id"), r.FormValue("approve") == "1"); err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 	mux.HandleFunc("POST /remove", func(w http.ResponseWriter, r *http.Request) {
-		if err := store.Remove(r.FormValue("keyFp")); err != nil {
+		if err := c.Store.Remove(r.FormValue("keyFp")); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

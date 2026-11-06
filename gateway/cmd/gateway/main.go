@@ -5,7 +5,8 @@
 //	onboarding  enrollment token → credential, control socket + heartbeat
 //	pairing     client-key auth, comparison code, allowlist + pending approvals
 //	sessions    brokered browser sessions: auth channel, gated tunnel
-//	localpage   the gateway's page on the home LAN (approve / remove browsers)
+//	localpage   the gateway's status page on the home LAN (approve / remove browsers)
+//	jellyfin    gets the Jellyfin API key without manual steps; version check
 //	tunnel      HTTP over data channels to Jellyfin (allowlist, key injection)
 //	update      "newer release available" notice (never self-updates)
 //
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"streamiq/gateway/internal/identity"
+	"streamiq/gateway/internal/jellyfin"
 	"streamiq/gateway/internal/localpage"
 	"streamiq/gateway/internal/onboarding"
 	"streamiq/gateway/internal/pairing"
@@ -69,12 +71,19 @@ func main() {
 	jf := &tunnel.Jellyfin{
 		Client: &http.Client{Transport: &http.Transport{DisableCompression: true}},
 		URL:    env("STREAMIQ_ORIGIN", "http://localhost:8096"), // local Jellyfin
-		Key:    os.Getenv("STREAMIQ_JELLYFIN_API_KEY"),
 		User:   os.Getenv("STREAMIQ_JELLYFIN_USER"),
 	}
-	if jf.Key == "" {
-		log.Printf("gateway: STREAMIQ_JELLYFIN_API_KEY not set — pairing works, playback refused (create a key in the Jellyfin dashboard)")
+	// Key: STREAMIQ_JELLYFIN_API_KEY wins; else the stored one, else the setup
+	// loop mints one (fresh Jellyfin) or the local page asks for a login.
+	setup := &jellyfin.Setup{Client: &http.Client{}, URL: jf.URL, StateDir: stateDir, OnKey: jf.SetKey}
+	if k := os.Getenv("STREAMIQ_JELLYFIN_API_KEY"); k != "" {
+		jf.SetKey(k, "")
+		setup.Fixed = true
 	}
+	if err := setup.Load(); err != nil {
+		log.Fatalf("gateway: %v", err)
+	}
+	go setup.Run(ctx)
 
 	// Enroll once, then heartbeat over the authenticated control socket and
 	// serve the local page.
@@ -103,17 +112,21 @@ func main() {
 			log.Fatalf("gateway: ICE: %v", err)
 		}
 		sess := &sessions.Sessions{Cert: cert, Fp: fp, Store: store, Jellyfin: jf, API: webAPI}
-		var online atomic.Bool
+		var lastBeat atomic.Int64
 		var notice atomic.Pointer[string]
 		notice.Store(new(string))
 		go checkUpdates(ctx, &notice)
 		go func() {
 			log.Printf("gateway: local page on %s", lan)
-			page := localpage.Handler(st.Name, st.GatewayID, fp, version, &online, &notice, store)
+			page := localpage.Handler(localpage.Config{
+				Name: st.Name, GatewayID: st.GatewayID, Fingerprint: fp, Version: version,
+				LastBeat: &lastBeat, Update: &notice, Store: store,
+				Jellyfin: func() any { return setup.View() }, Login: setup.Login,
+			})
 			log.Fatal(http.ListenAndServe(":"+port, localpage.Guard(lanHost, page)))
 		}()
 		go forever(ctx, func(ctx context.Context) error {
-			return onboarding.RunControl(ctx, api, st, lan, version, &online, sess.Handle)
+			return onboarding.RunControl(ctx, api, st, lan, version, &lastBeat, sess.Handle)
 		})
 	}
 

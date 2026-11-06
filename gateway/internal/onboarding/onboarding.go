@@ -73,8 +73,9 @@ func LoadOrEnroll(ctx context.Context, dir, api, token, fp string) (*State, erro
 
 // RunControl holds the authenticated control socket until it drops: heartbeats
 // out, broker messages (signaling for browser sessions) in, handed to handle
-// with a send func that writes JSON back on this socket.
-func RunControl(ctx context.Context, api string, st *State, lanURL, version string, online *atomic.Bool,
+// with a send func that writes JSON back on this socket. lastBeat holds the
+// last heartbeat's unix time, 0 while disconnected (status page).
+func RunControl(ctx context.Context, api string, st *State, lanURL, version string, lastBeat *atomic.Int64,
 	handle func(raw []byte, send func(any))) error {
 	conn, _, err := websocket.Dial(ctx, api+"/gateways/ws", &websocket.DialOptions{
 		HTTPHeader: http.Header{"Authorization": {"Bearer " + st.Credential}},
@@ -83,7 +84,7 @@ func RunControl(ctx context.Context, api string, st *State, lanURL, version stri
 		return fmt.Errorf("dial control: %w", err)
 	}
 	defer conn.CloseNow()
-	defer online.Store(false)
+	defer lastBeat.Store(0)
 	conn.SetReadLimit(1 << 20) // SDP exceeds the 32KB default
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -99,7 +100,7 @@ func RunControl(ctx context.Context, api string, st *State, lanURL, version stri
 		defer t.Stop()
 		for {
 			send(map[string]string{"type": "heartbeat", "lanUrl": lanURL, "version": version})
-			online.Store(true)
+			lastBeat.Store(time.Now().Unix())
 			select {
 			case <-ctx.Done():
 				return

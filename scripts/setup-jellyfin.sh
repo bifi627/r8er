@@ -4,8 +4,8 @@
 # library, scans it, mints an API key, and writes gateway/gateway.env for the dev gateway.
 #
 # ponytail: throwaway dev tooling — hardcoded creds, no error recovery beyond
-# "fail loud". Not product code (a real install creates the key in the
-# Jellyfin dashboard until item 4 automates it).
+# "fail loud". Not product code (a real install's gateway mints its own key:
+# gateway/internal/jellyfin).
 #
 #   bash scripts/setup-jellyfin.sh
 #

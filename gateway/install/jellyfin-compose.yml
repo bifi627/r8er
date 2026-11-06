@@ -1,0 +1,33 @@
+# Optional Jellyfin for StreamIQ: just Jellyfin, pinned to the version this
+# gateway release was tested with. Edit the media folders below (this file is
+# yours; updates never overwrite it), then:
+#
+#   docker compose -f jellyfin-compose.yml up -d
+#
+# Leave Jellyfin's setup wizard alone: the gateway completes it, creates the
+# admin user and shows its password on the gateway's local page
+# (http://localhost:8097).
+name: streamiq-jellyfin
+services:
+  jellyfin:
+    # Pinned deliberately, never `latest` (the gateway warns on another version).
+    image: jellyfin/jellyfin:12.4.20261026-211555
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - config:/config
+      - cache:/cache
+      # Media folders, read-only. One entry per folder, any number of drives.
+      # Windows paths work as-is, e.g. source: 'D:\Movies'.
+      - type: bind
+        source: ./media
+        target: /media/media
+        read_only: true
+      # - type: bind
+      #   source: 'D:\Movies'
+      #   target: /media/movies
+      #   read_only: true
+volumes:
+  config:
+  cache:
