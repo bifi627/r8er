@@ -55,8 +55,11 @@ relayed on cellular). **PR A (in progress):** native binaries on GitHub Releases
 SHA256-checked), `gateway.env` config file, daily update *notice* (notify-only, which is a
 recorded plan deviation), version in heartbeat + Gateways list (migration #5), JSON logs.
 User guide: `docs/install.md`. Dev ports moved to 18096 (Jellyfin) / 18097 (gateway page),
-so an installed copy runs on the defaults alongside dev. PR B: Jellyfin key without manual
-steps, optional pinned Jellyfin compose, status page.
+so an installed copy runs on the defaults alongside dev. **PR B:** Jellyfin key without manual
+steps (`gateway/internal/jellyfin`: wizard bootstrap on a fresh Jellyfin, else one admin login
+on the local page; key in `state/jellyfin.json`; `STREAMIQ_JELLYFIN_API_KEY` still wins),
+`install/jellyfin-compose.yml` release asset (pin = `jellyfin.Tested`, test-enforced), local
+page is now a status page (heartbeat, Jellyfin reachable/version/key, bootstrapped admin creds).
 
 **Item 5 — streaming client** (design: `docs/superpowers/specs/2026-11-02-streamiq-streaming-client-design.md`;
 consumption-only, functional UI). **PR A (watch it):** Gateways → Open → library /

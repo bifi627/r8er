@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Jellyfin is the tunnel's only origin, plus the policy that keeps a paired
@@ -23,11 +24,31 @@ import (
 type Jellyfin struct {
 	Client *http.Client
 	URL    string // e.g. http://localhost:8096
-	Key    string // STREAMIQ_JELLYFIN_API_KEY
 	User   string // STREAMIQ_JELLYFIN_USER (name); "" = the only user
 
+	key    atomic.Pointer[string] // SetKey; may arrive after start (internal/jellyfin)
 	mu     sync.Mutex
 	userID string
+}
+
+// SetKey installs the API key and, if user != "" and no user is configured,
+// the user to pin. Safe while sessions run.
+func (j *Jellyfin) SetKey(key, user string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if j.User == "" {
+		j.User = user
+	}
+	j.userID = ""
+	j.key.Store(&key)
+}
+
+// Key is the current API key ("" = none yet).
+func (j *Jellyfin) Key() string {
+	if k := j.key.Load(); k != nil {
+		return *k
+	}
+	return ""
 }
 
 const (
@@ -69,8 +90,8 @@ func allow(method, p string) bool {
 // prepare turns a browser request frame into the origin request, or returns
 // the HTTP status to refuse it with.
 func (j *Jellyfin) prepare(rq tunnelReq) (*http.Request, int, error) {
-	if j.Key == "" {
-		return nil, http.StatusServiceUnavailable, fmt.Errorf("STREAMIQ_JELLYFIN_API_KEY not set")
+	if j.Key() == "" {
+		return nil, http.StatusServiceUnavailable, fmt.Errorf("no Jellyfin API key yet (see the gateway's local page)")
 	}
 	u, err := url.Parse(rq.URL)
 	if err != nil || u.IsAbs() || u.RawPath != "" || u.Path != path.Clean(u.Path) ||
@@ -117,7 +138,7 @@ func (j *Jellyfin) prepare(rq tunnelReq) (*http.Request, int, error) {
 	if rq.Body != "" && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Authorization", `MediaBrowser Token="`+j.Key+`"`)
+	req.Header.Set("Authorization", `MediaBrowser Token="`+j.Key()+`"`)
 	return req, 0, nil
 }
 
@@ -136,7 +157,7 @@ func (j *Jellyfin) redact(hdr map[string]string, body io.ReadCloser) (io.ReadClo
 	if len(b) > maxText {
 		return nil, fmt.Errorf("text response over %d bytes", maxText)
 	}
-	b = bytes.ReplaceAll(b, []byte(j.Key), []byte("redacted"))
+	b = bytes.ReplaceAll(b, []byte(j.Key()), []byte("redacted"))
 	hdr["Content-Length"] = fmt.Sprint(len(b))
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
@@ -150,7 +171,7 @@ func (j *Jellyfin) user() (string, error) {
 		return j.userID, nil
 	}
 	req, _ := http.NewRequest("GET", j.URL+"/Users", nil)
-	req.Header.Set("Authorization", `MediaBrowser Token="`+j.Key+`"`)
+	req.Header.Set("Authorization", `MediaBrowser Token="`+j.Key()+`"`)
 	resp, err := j.Client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("jellyfin users: %w", err)

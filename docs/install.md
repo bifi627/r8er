@@ -1,10 +1,33 @@
-# Installing the StreamIQ gateway
+# Setting up StreamIQ at home
 
-The gateway is one native binary on the machine that has your media (NAS, PC,
-Mac). It needs a running [Jellyfin](https://jellyfin.org/downloads) on the
-same machine (default `http://localhost:8096`).
+StreamIQ streams the media on your own machine (NAS, PC, Mac) to your browser
+anywhere, without router configuration. Two programs run on that machine:
 
-## Install
+- **Jellyfin**, the media server that scans your files and plays them, and
+- the **StreamIQ gateway**, one native binary that connects Jellyfin to your
+  browsers.
+
+Setup takes five steps. The gateway's local page (`http://localhost:8097`)
+shows a status section for each of them.
+
+## 1. Get Jellyfin
+
+Pick one:
+
+- **You already run Jellyfin:** keep it. It must be reachable on the same
+  machine at `http://localhost:8096`.
+- **Native install:** install [Jellyfin](https://jellyfin.org/downloads), but
+  **skip its setup wizard**. The gateway completes it in step 3.
+- **Docker:** download `jellyfin-compose.yml` from the
+  [latest release](https://github.com/bifi627/streamiq/releases/latest) into a
+  folder of your choice. It is just Jellyfin, pinned to the version the gateway
+  was tested with, on port 8096. Edit the media folders in it: one read-only
+  bind per folder, any number of drives, Windows paths like `'D:\Movies'` work.
+  Each `source` folder must exist. Then run
+  `docker compose -f jellyfin-compose.yml up -d` in that folder and leave the
+  setup wizard alone. The file is yours; updates never overwrite it.
+
+## 2. Install the gateway
 
 1. In the StreamIQ web app: **Gateways → Add gateway**. Copy the command for your
    shell. It contains a one-time token that is valid for 15 minutes.
@@ -12,19 +35,54 @@ same machine (default `http://localhost:8096`).
    - Linux / macOS: `curl -fsSL …/install.sh | STREAMIQ_API_URL=… STREAMIQ_ENROLL_TOKEN=… sh`
    - Windows (PowerShell): `$env:STREAMIQ_API_URL='…'; $env:STREAMIQ_ENROLL_TOKEN='…'; irm …/install.ps1 | iex`
 3. Open the local page it prints (`http://localhost:8097`). On Windows, allow
-   the firewall prompt for private networks.
-4. Until item 4 PR B: give the gateway a Jellyfin API key. In the Jellyfin
-   dashboard, go to API Keys and create one, then add
-   `STREAMIQ_JELLYFIN_API_KEY=<key>` to `gateway.env` and re-run the update command.
+   the firewall prompt for private networks. The web app now lists the gateway.
 
 The installer verifies the binary against the release's `SHA256SUMS` and
 refuses a mismatch.
+
+## 3. Connect Jellyfin
+
+The local page's status shows **Jellyfin: reachable** and whether the gateway
+has an **API key**:
+
+- **Fresh Jellyfin** (wizard not done): nothing to do. Within seconds the
+  gateway completes the wizard, creates the Jellyfin admin `streamiq` with a
+  random password and shows that password on the local page. Keep it: you use
+  it to manage Jellyfin.
+- **Jellyfin already set up:** the page shows **Connect Jellyfin**. Sign in once
+  with a Jellyfin administrator. The gateway creates an API key named
+  `streamiq-gateway` and keeps only the key (`state/jellyfin.json`), never the
+  password, so changing the password later doesn't break anything. Playback
+  uses that user's libraries and watch progress (`STREAMIQ_JELLYFIN_USER` in
+  `gateway.env` picks another user).
+- `STREAMIQ_JELLYFIN_API_KEY` in `gateway.env` overrides both.
+
+The page warns when Jellyfin runs a version the gateway wasn't tested with.
+
+## 4. Add your media libraries
+
+Open Jellyfin at `http://localhost:8096`, sign in as the admin (step 3) and go
+to **Dashboard → Libraries → Add Media Library**. With the Docker compose file,
+pick the folder **inside the container**: a bind with `target: /media/movies`
+appears as `/media/movies`, not as `D:\Movies`. Jellyfin scans the library; that
+can take a while for big collections.
+
+## 5. Pair a browser and watch
+
+1. In the web app: **Gateways → Open** on your gateway, then **Pair this browser**.
+2. The browser shows a code. The local page shows a pairing request with a code.
+   **Approve** only if both codes match.
+3. Browse your libraries and play. The player shows whether the connection is
+   direct or relayed. Each browser (phone, laptop, …) is paired once; remove
+   browsers on the local page.
+
+## Where things live
 
 | | Windows | Linux / macOS |
 |---|---|---|
 | Install dir | `%LOCALAPPDATA%\streamiq` | `~/.local/share/streamiq` |
 | Settings | `gateway.env` (yours, kept on updates) | same |
-| Identity + paired browsers | `state\` (never touched by updates) | `state/` |
+| Identity, paired browsers, Jellyfin key | `state\` (never touched by updates) | `state/` |
 | Log | `gateway.log` | `gateway.log` |
 
 `STREAMIQ_DIR` overrides the install dir. Set `STREAMIQ_NAME` and `STREAMIQ_PAGE_PORT` on
@@ -51,6 +109,8 @@ settings and paired browsers stay. Nothing updates without you running it
 ## Releasing (maintainers)
 
 Push a tag `gateway-vX.Y.Z`. CI (`release-gateway.yml`) tests, builds all six
-binaries, and publishes the GitHub Release with `SHA256SUMS` and both install
-scripts. A tag with a suffix (`gateway-v1.5.0-rc.1`) becomes a prerelease,
+binaries, and publishes the GitHub Release with `SHA256SUMS`, both install
+scripts and `jellyfin-compose.yml`. When bumping the Jellyfin pin, update
+`docker-compose.yml`, `gateway/install/jellyfin-compose.yml` and
+`jellyfin.Tested` together (a gateway test enforces it). A tag with a suffix (`gateway-v1.5.0-rc.1`) becomes a prerelease,
 which `latest` and the update check skip.

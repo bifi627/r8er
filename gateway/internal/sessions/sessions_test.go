@@ -39,8 +39,9 @@ func TestPairThenTunnel(t *testing.T) {
 		t.Fatal(err)
 	}
 	store, _ := pairing.Open(dir)
-	gateway := &Sessions{Cert: cert, Fp: fp, Store: store,
-		Jellyfin: &tunnel.Jellyfin{Client: http.DefaultClient, URL: origin.URL, Key: "k"}}
+	jf := &tunnel.Jellyfin{Client: http.DefaultClient, URL: origin.URL}
+	jf.SetKey("k", "")
+	gateway := &Sessions{Cert: cert, Fp: fp, Store: store, Jellyfin: jf}
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	b := connect(t, gateway, "s1", key, false)

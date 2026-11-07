@@ -74,8 +74,8 @@ func TestRunControlHeartbeats(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	var online atomic.Bool
-	go RunControl(ctx, srv.URL, &State{Credential: "cred-1"}, "http://192.168.1.20:8097", "1.4.0", &online, func([]byte, func(any)) {})
+	var lastBeat atomic.Int64
+	go RunControl(ctx, srv.URL, &State{Credential: "cred-1"}, "http://192.168.1.20:8097", "1.4.0", &lastBeat, func([]byte, func(any)) {})
 	select {
 	case hb := <-got:
 		if hb["type"] != "heartbeat" || hb["lanUrl"] != "http://192.168.1.20:8097" || hb["version"] != "1.4.0" {
