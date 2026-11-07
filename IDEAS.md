@@ -45,3 +45,15 @@ and install script). On the dev machine: another install dir with its own
 state, page port and Jellyfin. Detail: item 4 spec.
 
 **When:** once there are real users on stable worth protecting from untested builds.
+
+### In-app setup guide
+**Area:** frontend / gateways
+
+The full home setup (Jellyfin → gateway → connect Jellyfin → libraries → pair)
+lives only in `docs/install.md`. The Add gateway dialog could walk through it
+instead: Jellyfin options with the compose download link, the install command,
+then live status from the gateway's heartbeat (online, Jellyfin reachable, key
+set) until the first browser is paired. Needs the heartbeat to carry the
+Jellyfin status (today it's only on the local page).
+
+**When:** before non-owner households install (with auto-update + signing).
